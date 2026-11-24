@@ -1,5 +1,6 @@
 ﻿# Node
 node_modules/
+dist/
 npm-debug.log*
 yarn-error.log*
 
@@ -15,6 +16,9 @@ build/
 !.env.example
 *.pem
 *.key
+.terraform/
+*.tfstate
+*.tfstate.*
 
 # IDE
 .vscode/

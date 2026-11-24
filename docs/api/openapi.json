@@ -1,0 +1,10 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Hasta API",
+    "version": "1.0.0",
+    "description": "Client API baseline. S0 exposes no client operations."
+  },
+  "servers": [{ "url": "/v1" }],
+  "paths": {}
+}

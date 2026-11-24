@@ -7,22 +7,23 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.1`
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-24` by `agent` in `PR #2`
+- updated: `2026-11-24` by `agent` in `feature/HAS-0a-bootstrap`
 
 ## Position
-- current sprint: `S2 — Gmail linking + QR transfer` (not started)
-- blocked by: `PR #2 conformance patch must merge first`
-- completed: `S0` (bootstrap) · `S1` (guest auth, device binding, sessions, welcome, test-mode panel)
-- open PRs: `#2 conformance patch`
-- merged: `#1 bootstrap (S0+S1)`
+- current sprint: `S0 — scaffold` (in review)
+- blocked by: S1 must branch from `main` after S0 is reviewed and merged; staging QA not run
+- completed: none verified on `main` at scaffold branch point `514f138c`
+- open PRs: `feature/HAS-0a-bootstrap` (S0)
+- merged: none verified on this repository
+- reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
-`T20` `T36` `T37` (narrowed: bans Google **sign-in routes** + weak ID-token verification; allows the Google auth library inside `modules/identity`) `T45` `T46` (cross-binding refresh → 401 + family revoke) `T47` (OpenAPI breaking-change diff vs previous tag, spectral lint, `docs/api/openapi.json`) `T48` (compose `postgres:16`)
+S0 candidate: `T20` `T36` `T37` `T45` `T47` `T48`; T36/T37 fail closed while quick-test and OAuth are absent, and need artifact/behavioral coverage when those features land. T47 has no prior release tag to diff. `T46` is deferred to S1 with device-bound refresh.
 
 ## Open test IDs
-`T25–T30` `T38–T44` (S2) · next mapped IDs after S2: `T15–T18`
+`T40–T42`, `T46` (S1) · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
-## Deviations in force
+## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
 | Prisma as ORM | accepted (spec recommended choice) | — |
@@ -30,6 +31,7 @@
 | native device-id channel + `path_provider` for Drift | accepted | ADR-0004 |
 | idempotency keyed by scope for pre-auth endpoints | accepted conditionally (device-scoped keys not replayable cross-device; tests both directions) | — |
 | `text.link` → `bg.brand`/`bg.brandPressed`/`bg.brandDisabled` | accepted | ADR-0005 closed by ADR-0006 |
+| S0 Prisma representation and build tooling | proposed on the S0 branch | [ADR-0007](../decisions/adr/ADR-0007-bootstrap-tooling.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
@@ -42,10 +44,10 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix <P0 from PR #2 review>   # then
-Hasta S2
+Hasta S1
 ```
 
 ## Changelog (append one line per merged PR)
-- `PR #1` — bootstrap S0+S1, merged with 400-line rule waived once
-- `PR #2` (planned) — T37 rewrite + T46/T47/T48 + device-bound refresh + brand tokens
+- Imported, unverified: `PR #1` — bootstrap S0+S1, reported merged with 400-line rule waived once
+- Imported, unverified: `PR #2` (planned) — T37 rewrite + T46/T47/T48 + device-bound refresh + brand tokens
+- `2026-11-24` — reconciled imported state against `main`; actual S0 scaffold submitted for review.
