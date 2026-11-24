@@ -3,8 +3,26 @@
   "info": {
     "title": "Hasta API",
     "version": "1.0.0",
-    "description": "Client API baseline. S0 exposes no client operations."
+    "description": "Hasta client API. Auth writes use device-scoped replay keys."
   },
   "servers": [{ "url": "/v1" }],
-  "paths": {}
+  "tags": [{ "name": "Auth", "description": "Guest account and device sessions" }],
+  "paths": {
+    "/auth/device/register": { "post": { "tags": ["Auth"], "operationId": "registerDevice", "description": "Registers a device over TLS.", "parameters": [{ "$ref": "#/components/parameters/WriteKey" }], "requestBody": { "$ref": "#/components/requestBodies/Register" }, "responses": { "200": { "description": "Device hash and token." }, "default": { "$ref": "#/components/responses/Error" } } } },
+    "/auth/guest": { "post": { "tags": ["Auth"], "operationId": "enterGuest", "description": "Creates or resumes a device-bound guest account.", "parameters": [{ "$ref": "#/components/parameters/WriteKey" }], "requestBody": { "$ref": "#/components/requestBodies/Guest" }, "responses": { "200": { "description": "Account, binding and session." }, "default": { "$ref": "#/components/responses/Error" } } } },
+    "/auth/refresh": { "post": { "tags": ["Auth"], "operationId": "rotateRefresh", "description": "Rotates a device-bound refresh token.", "parameters": [{ "$ref": "#/components/parameters/WriteKey" }], "requestBody": { "$ref": "#/components/requestBodies/Refresh" }, "responses": { "200": { "description": "Rotated session tokens." }, "default": { "$ref": "#/components/responses/Error" } } } },
+    "/auth/logout": { "post": { "tags": ["Auth"], "operationId": "revokeSession", "description": "Revokes device sessions, or all sessions for the authenticated account.", "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }], "requestBody": { "$ref": "#/components/requestBodies/Logout" }, "responses": { "204": { "description": "Sessions revoked." }, "default": { "$ref": "#/components/responses/Error" } } } },
+    "/me": { "get": { "tags": ["Auth"], "operationId": "currentAccount", "description": "Returns the scoped account, profile and capability flags.", "security": [{ "Bearer": [] }], "responses": { "200": { "description": "Current account view." }, "default": { "$ref": "#/components/responses/Error" } } } }
+  },
+  "components": {
+    "securitySchemes": { "Bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "parameters": { "WriteKey": { "name": "Idempotency-Key", "in": "header", "required": true, "description": "Client-generated UUIDv7.", "schema": { "type": "string", "format": "uuid" } } },
+    "responses": { "Error": { "description": "The API error envelope includes the request ID and optional retry delay." } },
+    "requestBodies": {
+      "Register": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["raw_device_id", "platform", "app_version", "os_version"], "properties": { "raw_device_id": { "type": "string" }, "platform": { "enum": ["android", "ios"] }, "app_version": { "type": "string" }, "os_version": { "type": "string" } } } } } },
+      "Guest": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["device_token", "locale"], "properties": { "device_token": { "type": "string" }, "locale": { "enum": ["my", "en"] } } } } } },
+      "Refresh": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["device_token", "refresh_token"], "properties": { "device_token": { "type": "string" }, "refresh_token": { "type": "string" } } } } } },
+      "Logout": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false, "required": ["device_token", "everywhere"], "properties": { "device_token": { "type": "string" }, "everywhere": { "type": "boolean" } } } } } }
+    }
+  }
 }

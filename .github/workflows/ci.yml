@@ -45,7 +45,8 @@ jobs:
         run: test "$(docker exec "$REDIS_CONTAINER" redis-cli -n 15 PING)" = PONG
       - name: Verify Compose and server image
         run: |
-          HASTA_POSTGRES_PASSWORD=local_ci_placeholder docker compose config --quiet
+          cp .env.example .env
+          docker compose config --quiet
           docker build --tag "hasta-server:${GITHUB_SHA}" apps/server
 
   gates:
