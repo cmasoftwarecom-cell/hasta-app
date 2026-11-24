@@ -94,16 +94,23 @@ jobs:
         with:
           flutter-version: '3.24.5'
           cache: true
+      - name: Install SQLite library for Linux repository tests
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - run: |
           flutter pub get --enforce-lockfile
+          flutter gen-l10n
           flutter analyze --no-pub
           flutter test --no-pub
-          flutter build apk --debug --no-pub
-      - name: T45 check packaged text and compiled payloads
+          flutter test --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
+          flutter build apk --debug --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
+          flutter build apk --release --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
+      - name: T36 and T45 check packaged text and compiled payloads
         working-directory: .
         run: |
           unzip -q apps/mobile/build/app/outputs/flutter-apk/app-debug.apk -d "$RUNNER_TEMP/hasta-apk"
-          node tools/scripts/static-gates.mjs "$RUNNER_TEMP/hasta-apk/assets/flutter_assets"
+          unzip -q apps/mobile/build/app/outputs/flutter-apk/app-release.apk -d "$RUNNER_TEMP/hasta-release"
+          node tools/scripts/check-qa-artifacts.mjs "$RUNNER_TEMP/hasta-apk" "$RUNNER_TEMP/hasta-release"
+          node tools/scripts/static-gates.mjs "$RUNNER_TEMP/hasta-apk/assets/flutter_assets" "$RUNNER_TEMP/hasta-release/assets/flutter_assets"
 
   terraform:
     runs-on: ubuntu-latest

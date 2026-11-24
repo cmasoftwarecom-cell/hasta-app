@@ -1,17 +1,25 @@
 # Hasta app
 
-## S0 scaffold
+## Local development
 
 The Flutter shell lives in `apps/mobile`, the NestJS/Prisma server in
-`apps/server`, and the AWS environment baseline in `infra/terraform`. This
-scaffold has no client API endpoints or account flows yet.
+`apps/server`, and the AWS environment baseline in `infra/terraform`.
 
-Copy `.env.example` to `.env`, choose a local URL-safe Postgres password, and
+Copy `.env.example` to `.env`, set distinct random auth and pepper keys and a local URL-safe Postgres password, and
 run `docker compose up --build` to launch the loopback-only services. The
 internal server probe is `GET http://127.0.0.1:3000/health`. To apply the
 schema locally, run `npm ci` and `npx prisma migrate deploy` from `apps/server`
 with `HASTA_DATABASE_URL` pointing to the Compose database. In `apps/mobile`,
-run `flutter pub get` and `flutter test`.
+run `flutter pub get --enforce-lockfile`, `flutter gen-l10n`, and `flutter test`
+(Linux tests require `libsqlite3-dev`).
+
+To run the S1 guest flow on an Android emulator, use
+`flutter run --dart-define=HASTA_API_BASE_URL=http://10.0.2.2:3000`.
+All deployed endpoints must use HTTPS. To exercise the fixture picker, enable
+`HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true` only on an isolated dev/test/beta
+backend, then add `--dart-define=HASTA_ENV=dev
+--dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true` to the debug build and
+hold the welcome-screen title for three seconds. Release builds exclude the panel.
 
 ## Agent skill package (minimal-prompt v2)
 

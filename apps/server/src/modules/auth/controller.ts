@@ -2,11 +2,14 @@ import { Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers, 
 import { denied, failure, uuidPattern, verify } from './credentials';
 import { GuestAuth } from './service';
 const deviceToken = /^dt_[\w.-]{1,1024}$/;
+const deviceProof = /^[\da-f]{64}$/;
+const handles = /^(tester\.(a|b|social|premium|minor|fresh))$/;
 const schemas = {
-  register: { raw_device_id: /^[\w:-]{1,128}$/, platform: /^(android|ios)$/, app_version: /^[\w.+-]{1,32}$/, os_version: /^[\w. +()-]{1,64}$/ },
-  guest: { device_token: deviceToken, locale: /^(my|en)$/ },
-  refresh: { device_token: deviceToken, refresh_token: /^rt_[\w-]{43}$/ },
-  logout: { device_token: deviceToken, everywhere: /^(true|false)$/ },
+  register: { device_proof: deviceProof, raw_device_id: /^[\w:-]{1,128}$/, platform: /^(android|ios)$/, app_version: /^[\w.+-]{1,32}$/, os_version: /^[\w. +()-]{1,64}$/ },
+  guest: { device_proof: deviceProof, device_token: deviceToken, locale: /^(my|en)$/ },
+  refresh: { device_proof: deviceProof, device_token: deviceToken, refresh_token: /^rt_[\w-]{43}$/ },
+  logout: { device_proof: deviceProof, device_token: deviceToken, everywhere: /^(true|false)$/ },
+  qa: { device_proof: deviceProof, device_token: deviceToken, handle: handles, reset: /^(true|false)$/ },
 };
 type Action = keyof typeof schemas;
 type Response = { setHeader(name: string, value: string): void };
@@ -21,13 +24,14 @@ class AccessGuard implements CanActivate {
 export class AuthController {
   constructor(private readonly auth: GuestAuth) {}
   private async submit(action: Action, body: unknown, key: string, res: Response, authorization?: string) {
+    if (action === 'qa' && !this.auth.qaAllowed) throw failure(404, 'not_found');
     const fields = Object.entries(schemas[action]);
     if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== fields.length || !uuidPattern.test(key ?? ''))
       throw failure(400, 'validation_failed');
     const input: Record<string, string> = {};
     for (const [name, pattern] of fields) {
       const value = (body as Record<string, unknown>)[name];
-      if ((name === 'everywhere' ? typeof value !== 'boolean' : typeof value !== 'string') || !pattern.test(String(value)))
+      if ((name === 'everywhere' || name === 'reset' ? typeof value !== 'boolean' : typeof value !== 'string') || !pattern.test(String(value)))
         throw failure(400, 'validation_failed');
       input[name] = String(value);
     }
@@ -56,5 +60,9 @@ export class AuthController {
   @Get('me') @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
   me(@Headers('authorization') authorization: string) {
     return this.auth.me(bearer(authorization));
+  }
+  @Post('qa/guest') @HttpCode(200) @Header('Cache-Control', 'no-store')
+  qa(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
+    return this.submit('qa', body, key, res);
   }
 }
