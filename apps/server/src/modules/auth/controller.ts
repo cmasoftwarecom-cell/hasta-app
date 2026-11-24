@@ -1,0 +1,60 @@
+import { Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
+import { denied, failure, uuidPattern, verify } from './credentials';
+import { GuestAuth } from './service';
+const deviceToken = /^dt_[\w.-]{1,1024}$/;
+const schemas = {
+  register: { raw_device_id: /^[\w:-]{1,128}$/, platform: /^(android|ios)$/, app_version: /^[\w.+-]{1,32}$/, os_version: /^[\w. +()-]{1,64}$/ },
+  guest: { device_token: deviceToken, locale: /^(my|en)$/ },
+  refresh: { device_token: deviceToken, refresh_token: /^rt_[\w-]{43}$/ },
+  logout: { device_token: deviceToken, everywhere: /^(true|false)$/ },
+};
+type Action = keyof typeof schemas;
+type Response = { setHeader(name: string, value: string): void };
+const bearer = (value?: string) => value?.match(/^Bearer ([\w.-]{1,1024})$/i)?.[1] ?? '';
+class AccessGuard implements CanActivate {
+  canActivate(ctx: ExecutionContext) {
+    verify('access', bearer(ctx.switchToHttp().getRequest().headers.authorization));
+    return true;
+  }
+}
+@Controller('v1')
+export class AuthController {
+  constructor(private readonly auth: GuestAuth) {}
+  private async submit(action: Action, body: unknown, key: string, res: Response, authorization?: string) {
+    const fields = Object.entries(schemas[action]);
+    if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length !== fields.length || !uuidPattern.test(key ?? ''))
+      throw failure(400, 'validation_failed');
+    const input: Record<string, string> = {};
+    for (const [name, pattern] of fields) {
+      const value = (body as Record<string, unknown>)[name];
+      if ((name === 'everywhere' ? typeof value !== 'boolean' : typeof value !== 'string') || !pattern.test(String(value)))
+        throw failure(400, 'validation_failed');
+      input[name] = String(value);
+    }
+    const { reply, replay } = await this.auth.write(action, input, key.toLowerCase(), bearer(authorization));
+    if (reply === false) throw denied();
+    if (replay) res.setHeader('Idempotent-Replayed', 'true');
+    return reply;
+  }
+  @Post('auth/device/register') @HttpCode(200) @Header('Cache-Control', 'no-store')
+  register(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
+    return this.submit('register', body, key, res);
+  }
+  @Post('auth/guest') @HttpCode(200) @Header('Cache-Control', 'no-store')
+  guest(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
+    return this.submit('guest', body, key, res);
+  }
+  @Post('auth/refresh') @HttpCode(200) @Header('Cache-Control', 'no-store')
+  refresh(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
+    return this.submit('refresh', body, key, res);
+  }
+  @Post('auth/logout') @HttpCode(204) @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
+  logout(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response,
+    @Headers('authorization') authorization: string) {
+    return this.submit('logout', body, key, res, authorization);
+  }
+  @Get('me') @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
+  me(@Headers('authorization') authorization: string) {
+    return this.auth.me(bearer(authorization));
+  }
+}

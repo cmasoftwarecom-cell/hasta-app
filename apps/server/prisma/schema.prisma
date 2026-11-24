@@ -144,3 +144,15 @@ model profiles {
   field_hlc    Json      @default("{}") @db.JsonB
   account      accounts  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
+
+model auth_requests {
+  scope       String
+  key         String   @db.Uuid
+  fingerprint String
+  sealed      String
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  expires_at  DateTime @db.Timestamptz(6)
+
+  @@id([scope, key])
+  @@index([expires_at])
+}
