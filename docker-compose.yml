@@ -1,0 +1,38 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: hasta
+      POSTGRES_USER: hasta
+      POSTGRES_PASSWORD: ${HASTA_POSTGRES_PASSWORD:?Set a local password in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD, pg_isready, -U, hasta, -d, hasta]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  redis:
+    image: redis:7.2-alpine
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+  server:
+    build: ./apps/server
+    environment:
+      HASTA_ENV: dev
+      HASTA_DATABASE_URL: postgresql://hasta:${HASTA_POSTGRES_PASSWORD}@postgres:5432/hasta
+      HASTA_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+volumes:
+  postgres_data:
