@@ -20,7 +20,7 @@
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints the typed S1 OpenAPI contract; there is no prior release tag to diff.
 
 ## Open test IDs
-`T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API; `T36` iOS CI compares QA-positive debug and unsigned device release builds. CI verification and deployed staging QA are tracked separately. Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
+`T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API. The first native run did not reach the guest profile; the test now checks simulator reachability, device channel and secure storage separately without logging credential values. `T36` passed the iOS debug/unsigned release artifact comparison on the first run. Deployed staging QA is separate and pending a resolvable HTTPS deployment. Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
