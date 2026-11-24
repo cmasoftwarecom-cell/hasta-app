@@ -112,6 +112,76 @@ jobs:
           node tools/scripts/check-qa-artifacts.mjs "$RUNNER_TEMP/hasta-apk" "$RUNNER_TEMP/hasta-release"
           node tools/scripts/static-gates.mjs "$RUNNER_TEMP/hasta-apk/assets/flutter_assets" "$RUNNER_TEMP/hasta-release/assets/flutter_assets"
 
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 35
+    env:
+      HASTA_DATABASE_URL: postgresql://hasta@127.0.0.1:55432/hasta_test
+      HASTA_ENV: test
+      HASTA_QUICK_TEST_ACCOUNTS_ENABLED: 'false'
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          cache: true
+      - name: Prepare Flutter and CocoaPods
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          pod --version
+      - name: T36 build and inspect unsigned iOS release
+        run: |
+          qa=(--dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true)
+          flutter build ios --simulator --debug --no-pub "${qa[@]}"
+          flutter build ios --release --no-codesign --no-pub "${qa[@]}"
+          node ../../tools/scripts/check-qa-artifacts.mjs build/ios/iphonesimulator/Runner.app build/ios/iphoneos/Runner.app ios
+      - name: Start an isolated PostgreSQL 16 test API
+        working-directory: apps/server
+        run: |
+          brew list --versions postgresql@16 >/dev/null || brew install postgresql@16
+          pg="$(brew --prefix postgresql@16)/bin"
+          "$pg/initdb" -D "$RUNNER_TEMP/hasta-pg" -U hasta -A trust --no-locale
+          "$pg/pg_ctl" -D "$RUNNER_TEMP/hasta-pg" -l "$RUNNER_TEMP/postgres.log" -o '-h 127.0.0.1 -p 55432' -w start
+          "$pg/createdb" -h 127.0.0.1 -p 55432 -U hasta hasta_test
+          echo "$pg" >> "$GITHUB_PATH"
+          npm ci
+          npm run build
+          npx prisma migrate deploy
+          set -a
+          source <(sed -n '/^HASTA_.*_TTL_SECONDS=/p; /^HASTA_.*_PER_HOUR=/p' ../../.env.example)
+          export HASTA_DEVICE_PEPPER="$(openssl rand -hex 32)"
+          export HASTA_AUTH_SECRET="$(openssl rand -hex 32)"
+          set +a
+          node dist/main.js >"$RUNNER_TEMP/hasta-api.log" 2>&1 &
+          curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health
+      - name: T40/T41 native guest on a fresh iOS simulator
+        run: |
+          device=$(xcrun simctl list devices available -j | node -e '
+            const all = Object.values(JSON.parse(require("fs").readFileSync(0)).devices).flat();
+            const phone = all.find(d => d.name.startsWith("iPhone") && d.isAvailable);
+            if (!phone) process.exit(1);
+            console.log(phone.udid);
+          ')
+          xcrun simctl shutdown "$device" 2>/dev/null || true
+          xcrun simctl erase "$device"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b
+          flutter test --no-pub -d "$device" integration_test/guest_native_test.dart \
+            --dart-define=HASTA_API_BASE_URL=http://127.0.0.1:3000
+          test "$(psql "$HASTA_DATABASE_URL" -Atc \
+            "SELECT count(*) FROM accounts WHERE is_guest")" = 1
+          test "$(psql "$HASTA_DATABASE_URL" -Atc \
+            "SELECT count(*) FROM sessions WHERE revoked_at IS NULL AND expires_at > now()")" = 1
+          test "$(psql "$HASTA_DATABASE_URL" -Atc \
+            "SELECT count(*) FROM sessions WHERE revoked_reason = 'logout'")" = 1
+
   terraform:
     runs-on: ubuntu-latest
     defaults:
