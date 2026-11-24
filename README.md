@@ -1,4 +1,19 @@
-# hasta-app — agent skill package (minimal-prompt v2)
+# Hasta app
+
+## S0 scaffold
+
+The Flutter shell lives in `apps/mobile`, the NestJS/Prisma server in
+`apps/server`, and the AWS environment baseline in `infra/terraform`. This
+scaffold has no client API endpoints or account flows yet.
+
+Copy `.env.example` to `.env`, choose a local URL-safe Postgres password, and
+run `docker compose up --build` to launch the loopback-only services. The
+internal server probe is `GET http://127.0.0.1:3000/health`. To apply the
+schema locally, run `npm ci` and `npx prisma migrate deploy` from `apps/server`
+with `HASTA_DATABASE_URL` pointing to the Compose database. In `apps/mobile`,
+run `flutter pub get` and `flutter test`.
+
+## Agent skill package (minimal-prompt v2)
 
 **Problem fixed:** every new thread used to need a ~15 KB pasted prompt plus a 154 KB bundle re-attach.
 **Fix:** all durable context now lives in this repo. A one-line message is a complete instruction.

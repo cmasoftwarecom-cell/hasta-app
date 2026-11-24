@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("HASTA_DATABASE_URL")
+}
+
+enum account_status {
+  active
+  paused
+  deleted
+  banned
+}
+
+enum identity_provider {
+  guest
+  google
+  apple
+}
+
+enum binding_role {
+  primary
+  secondary
+}
+
+enum device_platform {
+  android
+  ios
+}
+
+enum transfer_status {
+  pending
+  confirmed
+  expired
+  rejected
+}
+
+enum abuse_event {
+  guest_created
+  account_deleted
+}
+
+model accounts {
+  // Account/device/identity/session/transfer IDs are supplied as UUIDv7 by the writer.
+  id              String            @id @db.Uuid
+  status          account_status    @default(active)
+  is_guest        Boolean           @default(true)
+  display_name    String?
+  username        String?           @unique
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  deleted_at      DateTime?         @db.Timestamptz(6)
+  purge_at        DateTime?         @db.Timestamptz(6)
+  updated_hlc     BigInt            @default(0)
+  identities      identities[]
+  device_bindings device_bindings[]
+  sessions        sessions[]
+  transfer_tokens transfer_tokens[]
+  profile         profiles?
+}
+
+model identities {
+  id             String            @id @db.Uuid
+  account_id     String            @db.Uuid
+  provider       identity_provider
+  provider_sub   String
+  email          String?
+  email_verified Boolean           @default(false)
+  linked_at      DateTime          @default(now()) @db.Timestamptz(6)
+  account        accounts          @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, provider_sub])
+}
+
+model device_bindings {
+  id          String          @id @db.Uuid
+  account_id  String          @db.Uuid
+  device_hash String
+  role        binding_role    @default(primary)
+  platform    device_platform
+  push_token  String?
+  bound_at    DateTime        @default(now()) @db.Timestamptz(6)
+  revoked_at  DateTime?       @db.Timestamptz(6)
+  account     accounts        @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([account_id, device_hash])
+  @@index([device_hash, revoked_at], map: "idx_device_bindings_hash")
+}
+
+model sessions {
+  id             String    @id @db.Uuid
+  account_id     String    @db.Uuid
+  device_hash    String
+  refresh_hash   String    @unique
+  family_id      String    @db.Uuid
+  created_at     DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime  @db.Timestamptz(6)
+  revoked_at     DateTime? @db.Timestamptz(6)
+  revoked_reason String?
+  last_seen_at   DateTime? @db.Timestamptz(6)
+  account        accounts  @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([family_id])
+}
+
+model transfer_tokens {
+  id          String          @id @db.Uuid
+  account_id  String          @db.Uuid
+  token_hash  String          @unique
+  from_device String
+  to_device   String?
+  status      transfer_status @default(pending)
+  created_at  DateTime        @default(now()) @db.Timestamptz(6)
+  expires_at  DateTime        @db.Timestamptz(6)
+  used_at     DateTime?       @db.Timestamptz(6)
+  account     accounts        @relation(fields: [account_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model device_cooldowns {
+  device_hash String   @id
+  reason      String   @default("account_deleted")
+  until       DateTime @db.Timestamptz(6)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model abuse_logs {
+  id          BigInt      @id @default(autoincrement())
+  device_hash String
+  event       abuse_event
+  occurred_at DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([device_hash, occurred_at], map: "idx_abuse_device_window")
+}
+
+model profiles {
+  user_id      String    @id @db.Uuid
+  display_name String
+  bio          String?
+  avatar_key   String?
+  birth_date   DateTime? @db.Date
+  privacy      Json      @default("{}") @db.JsonB
+  updated_hlc  BigInt    @default(0)
+  field_hlc    Json      @default("{}") @db.JsonB
+  account      accounts  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
