@@ -1,14 +1,15 @@
 import 'reflect-metadata';
-import { ArgumentsHost, Catch, Controller, Get, Header, HttpException, Injectable, Module, OnModuleDestroy } from '@nestjs/common';
+import { ArgumentsHost, Catch, Controller, Get, Header, HttpException, Injectable, Module, OnApplicationShutdown } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaClient } from '@prisma/client';
 import { AuthController } from './modules/auth/controller';
 import { GuestAuth } from './modules/auth/service';
+import { ReplayExpiry } from './modules/auth/replay-expiry';
 import { uuid7, uuidPattern } from './modules/auth/credentials';
 
 @Injectable()
-export class Database extends PrismaClient implements OnModuleDestroy {
-  async onModuleDestroy(): Promise<void> {
+export class Database extends PrismaClient implements OnApplicationShutdown {
+  async onApplicationShutdown(): Promise<void> {
     await this.$disconnect();
   }
 }
@@ -37,11 +38,11 @@ class ApiErrors {
   }
 }
 @Module({ controllers: [HealthController, AuthController],
-  providers: [Database, { provide: PrismaClient, useExisting: Database }, GuestAuth] })
+  providers: [Database, { provide: PrismaClient, useExisting: Database }, GuestAuth, ReplayExpiry] })
 class AppModule {}
 
 export async function createApp() {
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule, { logger: ['warn', 'error'] });
   app.use((request: { headers: Record<string, unknown> }, response: { setHeader(name: string, value: string): void },
     next: () => void) => {
     const id = request.headers['x-request-id'];

@@ -10,17 +10,17 @@
 - updated: `2026-11-24` by `agent` on `feature/HAS-1a-guest-auth`
 
 ## Position
-- current sprint: `S1 — guest auth` (backend in draft; Flutter welcome, native secure storage, settings, QA panel and staging still open)
-- blocked by: finish S1 and its release/mobile gates before S2
+- current sprint: `S1 — guest auth` (five review fixes implemented in draft PR #2)
+- blocked by: verify the revised PR in CI, run native/staging QA, and review PR #2 before S2
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
-- open PRs: S1 draft (`feature/HAS-1a-guest-auth`)
+- open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), S1 draft (`feature/HAS-1a-guest-auth`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
-`T20` `T36` `T37` `T45` `T47` `T48` on current baseline; S1 draft adds `T41`, `T42` and `T46` HTTP/DB tests. T36 needs a release artifact gate when the panel lands. T47 has no prior release tag to diff.
+`T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints the typed S1 OpenAPI contract; there is no prior release tag to diff.
 
 ## Open test IDs
-`T40` (backend passes, mobile E2E open), `T36` (full release gate open) · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
+`T40` (native device/staging end-to-end remains open), `T36` (iOS artifact/device verification remains open) · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
@@ -32,6 +32,7 @@
 | `text.link` → `bg.brand`/`bg.brandPressed`/`bg.brandDisabled` | accepted | ADR-0005 closed by ADR-0006 |
 | S0 Prisma representation and build tooling | proposed on the S0 branch | [ADR-0007](../decisions/adr/ADR-0007-bootstrap-tooling.md) |
 | S1 pre-auth replay, credentials, policy injection and draft scope | draft | [ADR-0008](../decisions/adr/ADR-0008-guest-auth.md) |
+| S1 installation proof; replay retention and state; secure storage dependencies and QA fixture scope | proposed in PR #2 | [ADR-0009](../decisions/adr/ADR-0009-s1-enrollment-and-mobile.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
@@ -44,7 +45,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta S1
+Hasta review PR #2
 ```
 
 ## Changelog (append one line per merged PR)

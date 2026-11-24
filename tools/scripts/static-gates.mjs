@@ -25,10 +25,10 @@ const gates = {
     assert.doesNotMatch(server, /\b(?:otp[a-z_-]*|sms(?:[-_]?provider|\b)|twilio|vonage)\b/i);
   },
   T36: () => {
-    // Fail closed until S1 adds a release-artifact exclusion test for its test panel.
-    for (const path of mobile) {
-      assert.doesNotMatch(read(path), /QUICK_TEST_ACCOUNTS|quick[\s_-]*test[\s_-]*accounts?|QuickTestPanel/i, path);
-    }
+    const panel = read('apps/mobile/lib/features/auth/presentation/guest_screen.dart');
+    assert.match(panel, /const _qa = !kReleaseMode\s*&&/);
+    assert.match(panel, /bool.fromEnvironment\('HASTA_QUICK_TEST_ACCOUNTS_ENABLED'\)/);
+    assert.match(panel, /if \(_qa\)\s*Listener/);
   },
   T37: () => {
     assert.doesNotMatch(server, /(?:\bsign[-_ ]?in\b|(?:google|apple)[^/\n]{0,50}\blog[-_ ]?in\b)/i);

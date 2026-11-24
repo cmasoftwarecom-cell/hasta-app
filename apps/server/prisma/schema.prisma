@@ -156,3 +156,11 @@ model auth_requests {
   @@id([scope, key])
   @@index([expires_at])
 }
+
+model device_enrollments {
+  device_hash String          @id
+  proof_hash  String
+  platform    device_platform
+  qa_only     Boolean         @default(false)
+  created_at  DateTime        @default(now()) @db.Timestamptz(6)
+}

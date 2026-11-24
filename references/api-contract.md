@@ -36,11 +36,11 @@ Standard codes: `unauthenticated` · `forbidden` · `not_found` · `validation_f
 ## 1. Auth & Identity
 
 ### 1.1 `POST /v1/auth/device/register` — public
-Registers the device and returns the hash. The raw id crosses the wire once, over TLS, and is **never persisted**.
+Registers the device and returns the hash. The raw ID is sent only for enrollment or re-registration, over TLS, and is **never persisted**. Before the first request, the app generates a 32-byte random installation proof, stores it in OS secure storage, and sends it as 64 lowercase hexadecimal characters. The server keeps only its SHA-256 digest. Re-registration must prove the same enrollment; a device identifier by itself cannot recover a guest account. See ADR-0009.
 
 Request
 ```json
-{ "raw_device_id": "android-id-or-idfv", "platform": "android", "app_version": "1.0.0", "os_version": "14" }
+{ "raw_device_id": "android-id-or-idfv", "platform": "android", "app_version": "1.0.0", "os_version": "14", "device_proof": "<64 lowercase hex characters>" }
 ```
 Response `200`
 ```json
@@ -52,7 +52,7 @@ Creates or resumes the guest account for this device.
 
 Request
 ```json
-{ "device_token": "dt_…", "locale": "my" }
+{ "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>", "locale": "my" }
 ```
 Response `200`
 ```json
@@ -63,13 +63,13 @@ Response `200`
   "is_new_account": true
 }
 ```
-Errors: `429 device_cooldown` (`details.retry_after_days`), `403 validation_failed`, `429 rate_limited`.
+Errors: `400 validation_failed`, `401 unauthenticated` (includes invalid proof), `409 idempotency_conflict`, `429 device_cooldown` (`details.retry_after_days`), `429 rate_limited`. Auth write replays require proof first. A saved session reply is returned only while its access token, session and binding are valid and the account is active; otherwise the replay returns `401` without credentials. Expired replay rows are rejected on lookup and swept independently of traffic.
 
 ### 1.3 `POST /v1/auth/refresh` — public
-Request `{ "refresh_token": "rt_…", "device_token": "dt_…" }` → `200` new pair (old refresh invalidated). Reuse of a rotated token ⇒ `401 unauthenticated` and the whole token family is revoked.
+Request `{ "refresh_token": "rt_…", "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>" }` → `200` new pair (old refresh invalidated). Retrying the original request key can return the same still-active replacement. Reuse outside that retry, or use with a different proven binding, returns `401 unauthenticated` and revokes the whole token family.
 
 ### 1.4 `POST /v1/auth/logout` — auth
-`{ "device_token": "dt_…", "everywhere": false }` → `204`.
+`{ "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>", "everywhere": false }` → `204`. Same-key replay while the original access token remains signed and unexpired returns empty `204` with `Idempotent-Replayed: true`; it never creates a session.
 
 ### 1.5 `GET /v1/me` — auth
 ```json
@@ -123,6 +123,12 @@ Errors: `410 token_expired`, `409 token_used`, `409 guest_exists_on_target`, `40
 `DELETE /v1/account` — auth, online only, requires `Confirm-Deletion: <typed phrase hash>` → `202 { "status":"deleted", "purge_at":"…(+30d)", "cooldown_until":"…(+30d)", "store_subscription_notice_key":"billing.cancelInStore", "drive_backup_action":"deleted|user_action_required" }`
 
 ---
+
+### 1.11 Internal QA guest fixtures (S1 only)
+
+`POST /v1/qa/guest` uses `Idempotency-Key` and accepts `{device_token, device_proof, handle, reset}`. With a valid non-QA enrollment it opens the named device-scoped test fixture; `reset: true` deletes and recreates only that fixture. The `200` response is the guest response plus a fixture-specific `device_token`. The six handles are `tester.a`, `tester.b`, `tester.social`, `tester.premium`, `tester.minor`, and `tester.fresh`. These are S1 guest profiles only; later-sprint entities and entitlements are not seeded.
+
+The route returns `404` unless both the environment is `dev`, `test`, or `beta` and `HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true`. Keep QA environments and their database and signing keys separate. The mobile panel is never compiled into release builds.
 
 ## 2. Social
 

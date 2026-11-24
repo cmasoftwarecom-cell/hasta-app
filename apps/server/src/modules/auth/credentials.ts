@@ -1,6 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { HttpException } from '@nestjs/common';
 export const sha = (value: string) => createHash('sha256').update(value).digest('hex');
+export const sameDigest = (a: string, b: string) =>
+  a.length === b.length && timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
 export const uuidPattern = /^[\da-f]{8}-[\da-f]{4}-7[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i;
 export function uuid7() {
   const b = randomBytes(16);
