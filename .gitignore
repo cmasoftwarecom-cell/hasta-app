@@ -1,0 +1,28 @@
+﻿# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+build/
+*.iml
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archive — never paste these to the agent (SKILL.md §1.4)
+archive/
