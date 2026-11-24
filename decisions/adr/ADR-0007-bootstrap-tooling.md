@@ -20,3 +20,8 @@ enable request-body parsing or accept uploads. S0 uses
 Node's built-in test runner for the small framework smoke; business tests
 remain planned for the spec's Jest suite. Terraform declares the AWS provider
 and remote-state boundary but provisions no resources in S0.
+
+T45 excludes two exact Flutter 3.24.5 debug compiler documentation strings
+in `isolate_snapshot_data` and `kernel_blob.bin` referring to the Nexus 6
+phone. The gate removes at most one exact occurrence per artifact and still
+rejects the legacy brand everywhere else in application source and bundles.
