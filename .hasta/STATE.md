@@ -7,13 +7,13 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.1`
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-24` by `agent` in `feature/HAS-0a-bootstrap`
+- updated: `2026-11-24` by `agent` in `PR #1` (`feature/HAS-0a-bootstrap`)
 
 ## Position
 - current sprint: `S0 — scaffold` (in review)
 - blocked by: S1 must branch from `main` after S0 is reviewed and merged; staging QA not run
 - completed: none verified on `main` at scaffold branch point `514f138c`
-- open PRs: `feature/HAS-0a-bootstrap` (S0)
+- open PRs: `#1` (`feature/HAS-0a-bootstrap`, S0)
 - merged: none verified on this repository
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 

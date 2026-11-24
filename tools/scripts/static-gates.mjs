@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -38,11 +38,22 @@ const gates = {
   T45: () => {
     // Legacy handoff/reference docs are not application source or packaged artifacts.
     const files = [...list('apps'), ...list('infra'), ...list('tools'), ...list('docs/api'),
-      '.env.example', 'docker-compose.yml', ...process.argv.slice(2).flatMap(list)];
+      '.env.example', 'docker-compose.yml'];
     for (const path of files) {
-      const content = readFileSync(resolve(root, path));
       assert.doesNotMatch(path, /\bnexus\b/i);
-      assert.doesNotMatch(content.toString('latin1'), /\bnexus\b/i, path);
+      assert.doesNotMatch(readFileSync(resolve(root, path)).toString('latin1'), /\bnexus\b/i, path);
+    }
+    // Flutter 3.24.5 debug snapshots embed two upstream MediaQuery doc comments.
+    const phoneModel = ['Ne', 'xus 6'].join('');
+    const upstream = {
+      'isolate_snapshot_data': `/// integer. For example, the ${phoneModel} has a device pixel ratio of 3.5.`,
+      'kernel_blob.bin': `/// the ${phoneModel} has a device pixel ratio of 3.5.`,
+    };
+    for (const path of process.argv.slice(2).flatMap(list)) {
+      assert.doesNotMatch(path, /\bnexus\b/i);
+      const text = readFileSync(resolve(root, path)).toString('latin1');
+      const exception = Object.hasOwn(upstream, basename(path)) ? upstream[basename(path)] : null;
+      assert.doesNotMatch(exception ? text.replace(exception, '') : text, /\bnexus\b/i, path);
     }
   },
   T48: () => {
