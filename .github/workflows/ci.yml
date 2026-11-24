@@ -159,7 +159,8 @@ jobs:
           export HASTA_DEVICE_PEPPER="$(openssl rand -hex 32)"
           export HASTA_AUTH_SECRET="$(openssl rand -hex 32)"
           set +a
-          node dist/main.js >"$RUNNER_TEMP/hasta-api.log" 2>&1 &
+          node -e "require('./dist/main').createApp().then(app => app.listen(3000, '127.0.0.1'))" \
+            >"$RUNNER_TEMP/hasta-api.log" 2>&1 &
           curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health
       - name: T40/T41 native guest on a fresh iOS simulator
         run: |
