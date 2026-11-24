@@ -25,6 +25,8 @@ dev_dependencies:
   drift_dev: 2.20.3
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
 flutter:
   generate: true

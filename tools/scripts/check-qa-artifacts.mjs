@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 
-const [debug, release] = process.argv.slice(2);
-assert.ok(debug && release, 'Pass paths to the extracted QA debug and release APKs');
+const [debug, release, platform = 'android'] = process.argv.slice(2);
+assert.ok(debug && release && ['android', 'ios'].includes(platform), 'Pass debug and release artifact directories and optional ios platform');
 const marker = 'HASTA_QA_FIXTURE_PANEL_V1';
 const fixtures = ['tester.a', 'tester.b', 'tester.social', 'tester.premium', 'tester.minor', 'tester.fresh'];
 const contents = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -17,7 +17,10 @@ for (const value of [marker, ...fixtures, 'qa/guest']) {
   assert.ok(debugPayload.includes(value), `Missing debug positive control: ${value}`);
 }
 const releaseFiles = contents(release);
-assert.ok(releaseFiles.some((path) => basename(path) === 'libapp.so'), 'Release artifact must contain the Dart AOT payload');
+assert.ok(releaseFiles.some((path) => platform === 'android'
+  ? basename(path) === 'libapp.so'
+  : basename(path) === 'App' && basename(dirname(path)) === 'App.framework'
+), 'Release artifact must contain the Dart AOT payload');
 assert.ok(!releaseFiles.some((path) => basename(path) === 'kernel_blob.bin'), 'Release must not contain a debug kernel');
 for (const path of releaseFiles) {
   const payload = readFileSync(path);
@@ -25,4 +28,4 @@ for (const path of releaseFiles) {
     assert.ok(!payload.includes(value) && !payload.includes(Buffer.from(value, 'utf16le')), `QA payload in ${path}: ${value}`);
   }
 }
-console.log('T36: PASS (QA-positive debug APK; QA excluded from release APK with the same defines)');
+console.log(`T36: PASS (${platform}: QA-positive debug artifact; QA excluded from release with the same defines)`);

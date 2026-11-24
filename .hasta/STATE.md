@@ -11,7 +11,7 @@
 
 ## Position
 - current sprint: `S1 — guest auth` (five review fixes implemented in draft PR #2)
-- blocked by: verify the revised PR in CI, run native/staging QA, and review PR #2 before S2
+- blocked by: iOS CI verification, deployed staging QA, and review of PR #2 before S2
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
 - open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), S1 draft (`feature/HAS-1a-guest-auth`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
@@ -20,7 +20,7 @@
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints the typed S1 OpenAPI contract; there is no prior release tag to diff.
 
 ## Open test IDs
-`T40` (native device/staging end-to-end remains open), `T36` (iOS artifact/device verification remains open) · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
+`T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API; `T36` iOS CI compares QA-positive debug and unsigned device release builds. CI verification and deployed staging QA are tracked separately. Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
