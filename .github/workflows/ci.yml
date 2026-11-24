@@ -1,0 +1,120 @@
+name: Hasta CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: hasta_test
+          POSTGRES_USER: hasta
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U hasta -d hasta_test" --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      HASTA_DATABASE_URL: postgresql://hasta@127.0.0.1:5432/hasta_test
+      HASTA_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+          cache: npm
+          cache-dependency-path: apps/server/package-lock.json
+      - working-directory: apps/server
+        run: |
+          npm ci
+          npm audit --omit=dev --audit-level=high
+          npm run build
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
+          npm run test:smoke
+      - name: Redis isolation smoke (test index 15)
+        env:
+          REDIS_CONTAINER: ${{ job.services.redis.id }}
+        run: test "$(docker exec "$REDIS_CONTAINER" redis-cli -n 15 PING)" = PONG
+      - name: Verify Compose and server image
+        run: |
+          HASTA_POSTGRES_PASSWORD=local_ci_placeholder docker compose config --quiet
+          docker build --tag "hasta-server:${GITHUB_SHA}" apps/server
+
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
+      - name: T20, T36, T37, T45, T48 and design tokens
+        run: |
+          node tools/scripts/static-gates.mjs
+          node tools/scripts/design-tokens.mjs --check
+      - name: T47 OpenAPI lint and breaking changes versus previous release
+        run: |
+          npx --yes @stoplight/spectral-cli@6.15.0 lint docs/api/openapi.json --fail-severity warn
+          tag=$(git tag --merged HEAD --list 'v[0-9]*' --sort=-version:refname | head -1)
+          if [ -z "$tag" ]; then
+            echo 'S0 baseline: no previous API release tag.'
+            exit 0
+          fi
+          baseline="$RUNNER_TEMP/openapi-baseline.json"
+          git show "${tag}:docs/api/openapi.json" > "$baseline"
+          release=oasdiff_1.39.0_linux_amd64.tar.gz
+          curl --fail --silent --show-error --location \
+            "https://github.com/oasdiff/oasdiff/releases/download/v1.39.0/$release" -o "$release"
+          echo "71a85930728f367a2086077b7ae1411319421549d18473a3e8258b6451520433  $release" | sha256sum -c -
+          tar -xzf "$release" -C "$RUNNER_TEMP" oasdiff
+          "$RUNNER_TEMP/oasdiff" breaking "$baseline" docs/api/openapi.json --fail-on ERR
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          cache: true
+      - run: |
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub
+          flutter build apk --debug --no-pub
+      - name: T45 check packaged text and compiled payloads
+        working-directory: .
+        run: |
+          unzip -q apps/mobile/build/app/outputs/flutter-apk/app-debug.apk -d "$RUNNER_TEMP/hasta-apk"
+          node tools/scripts/static-gates.mjs "$RUNNER_TEMP/hasta-apk/assets/flutter_assets"
+
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.9.8'
+      - run: |
+          terraform fmt -check
+          terraform init -backend=false -input=false -lockfile=readonly
+          terraform validate
