@@ -33,6 +33,8 @@ The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression fo
 
 `T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API. The first native run did not reach the guest profile; the [diagnostic rerun](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45393944704/job/138444624882) timed out while loading the test suite after building the app, so it did not verify either ID. `T36` passed the iOS debug/unsigned release artifact comparison. Deployed staging QA is separate: HTTPS `/health` has not been verified, and no staging fixtures were seeded. See the [origin runbook and 12 checks](../docs/qa/s1-staging.md). Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
+P0-T40-T41-IOS-AUTH-503: the [failing simulator job](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45593586792/job/139133766537) logged a broken pipe while loading policy values, then `/health` passed but the first Guest tap returned 503. The isolated test launcher now validates allowed policy values before listening and generates ephemeral credentials in the server process. A committed test rejects an empty policy input and exercises iOS-shaped enrollment, creation, and same-device resume over loopback HTTP. Native T40/T41 still require a green simulator run with the existing database assertions.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
