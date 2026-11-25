@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="hasta_transfer_approve">Approve device transfer</string>
+    <string name="hasta_transfer_compare">Approve only if the new device shows %1$s</string>
+</resources>

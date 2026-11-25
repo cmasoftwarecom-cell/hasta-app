@@ -10,6 +10,8 @@ import { GoogleLinkController } from './modules/identity/link-controller';
 import { GOOGLE_LINK, GoogleLinks, googleLinkProvider } from './modules/identity/link-service';
 import { RecoveryController } from './modules/identity/recovery-controller';
 import { GmailRecovery } from './modules/identity/recovery-service';
+import { TransferController } from './modules/identity/transfer-controller';
+import { DeviceTransfer } from './modules/identity/transfer-service';
 
 @Injectable()
 export class Database extends PrismaClient implements OnApplicationShutdown {
@@ -41,9 +43,9 @@ class ApiErrors {
       status, request_id: res.getHeader('X-Request-Id'), details: body?.details ?? {}, retry_after_seconds: body?.seconds ?? null } });
   }
 }
-@Module({ controllers: [HealthController, AuthController, GoogleLinkController, RecoveryController],
+@Module({ controllers: [HealthController, AuthController, GoogleLinkController, RecoveryController, TransferController],
   providers: [Database, { provide: PrismaClient, useExisting: Database }, GuestAuth, ReplayExpiry,
-    GoogleLinks, GmailRecovery] })
+    GoogleLinks, GmailRecovery, DeviceTransfer] })
 class AppModule {}
 
 export async function createApp(providerFactory = googleLinkProvider) {

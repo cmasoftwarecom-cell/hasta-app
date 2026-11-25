@@ -8,8 +8,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../domain/device_transfer.dart';
 import '../domain/gmail_recovery.dart';
 import '../domain/guest_session.dart';
+import 'native_transfer_approval.dart';
 import 'profile_cache.dart';
 
 const _identityChannel = MethodChannel('app.hasta.mobile/device');
@@ -312,6 +314,103 @@ class GuestRepository implements GuestSession {
           refresh is! String ||
           refresh.isEmpty) {
         throw const AuthFailure('recovery_reply_invalid');
+      }
+      return _remember(reply, device);
+    });
+  }
+
+  Future<Document> _transferSource() async {
+    final current = await _session();
+    if (current == null || current['qa'] == true) {
+      throw const AuthFailure('unauthenticated', status: 401);
+    }
+    return current;
+  }
+
+  Future<TransferOffer> startDeviceTransfer(
+      NativeTransferApproval approval) async {
+    if (await restore() == null) {
+      throw const AuthFailure('unauthenticated', status: 401);
+    }
+    final source = await _transferSource();
+    return _write(
+        'auth/transfer/start',
+        {
+          'device_token': source['device'],
+          'device_proof': await _proof(),
+          'approval_key': await approval.publicKey(),
+        },
+        (reply) async => TransferOffer.fromReply(reply),
+        access: source['access'] as String);
+  }
+
+  Future<TransferProgress> deviceTransferStatus(TransferOffer offer) async {
+    final source = await _transferSource();
+    return TransferProgress.fromReply(await _request(
+        'auth/transfer/${transferId(offer.id)}',
+        access: source['access'] as String));
+  }
+
+  Future<TransferReceipt> redeemDeviceTransfer(String qrPayload) async {
+    final token = parseTransferQr(qrPayload);
+    final proof = await _proof();
+    final device = await _deviceToken(proof);
+    return _write(
+        'auth/transfer/redeem',
+        {
+          'device_token': device,
+          'device_proof': proof,
+          'token': token,
+        },
+        (reply) async => TransferReceipt.fromReply(reply));
+  }
+
+  Future<void> confirmDeviceTransfer(SignedTransferApproval approval) async {
+    final source = await _transferSource();
+    await _write('auth/transfer/confirm', {
+      'device_token': source['device'],
+      'device_proof': await _proof(),
+      'transfer_id': transferId(approval.id),
+      'approval_signature': approval.signature,
+    }, (reply) async {
+      if (reply['status'] != 'confirmed') {
+        throw const AuthFailure('transfer_reply_invalid');
+      }
+      if ((await _session())?['account_id'] == source['account_id']) {
+        await _forgetSession();
+      }
+    }, access: source['access'] as String);
+  }
+
+  Future<void> rejectDeviceTransfer(TransferOffer offer) async {
+    final source = await _transferSource();
+    await _write('auth/transfer/reject', {
+      'device_token': source['device'],
+      'device_proof': await _proof(),
+      'transfer_id': transferId(offer.id),
+    }, (reply) async {
+      if (reply['status'] != 'rejected') {
+        throw const AuthFailure('transfer_reply_invalid');
+      }
+    }, access: source['access'] as String);
+  }
+
+  Future<GuestProfile> claimDeviceTransfer(TransferReceipt receipt) async {
+    final proof = await _proof();
+    final device = await _deviceToken(proof);
+    return _write('auth/transfer/claim', {
+      'device_token': device,
+      'device_proof': proof,
+      'transfer_id': transferId(receipt.id),
+    }, (reply) {
+      final account = reply['account'];
+      if (reply['is_new_account'] != false ||
+          account is! Document ||
+          account['id'] is! String ||
+          account['is_guest'] is! bool ||
+          reply['access_token'] is! String ||
+          reply['refresh_token'] is! String) {
+        throw const AuthFailure('transfer_reply_invalid');
       }
       return _remember(reply, device);
     });

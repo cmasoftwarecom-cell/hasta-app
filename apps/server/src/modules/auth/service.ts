@@ -167,24 +167,47 @@ export class GuestAuth {
     return bound.account;
   }
 
-  async provedActor(tx: Tx, bearer: string, credentials: { device_token: string; device_proof: string }) {
+  async provedActor(tx: Tx, bearer: string, credentials: { device_token: string; device_proof: string },
+    options: { lockedTarget?: boolean; realOnly?: boolean } = {}) {
     const actor = access(bearer);
     const device = deviceClaims(credentials.device_token);
     if (actor.hash !== device.hash) throw denied();
-    await lock(tx, `device:${actor.hash}`);
+    if (!options.lockedTarget) await lock(tx, `device:${actor.hash}`);
     await lock(tx, `account:${actor.sub}`);
-    await this.proveEnrollment(tx, 'logout', device, sha(credentials.device_proof));
+    if (options.realOnly) await this.requireRealEnrollment(tx, device, credentials.device_proof);
+    else await this.proveEnrollment(tx, 'logout', device, sha(credentials.device_proof));
     return actor;
   }
 
   async provedRecoveryDevice(tx: Tx, credentials: { device_token: string; device_proof: string }) {
     const device = deviceClaims(credentials.device_token);
     await lock(tx, `device:${device.hash}`);
-    // Never let a synthetic QA enrollment become a real recovery destination.
+    await this.requireRealEnrollment(tx, device, credentials.device_proof);
+    return device;
+  }
+
+  private async requireRealEnrollment(tx: Tx, device: Device, proof: string) {
+    // Never let a synthetic QA enrollment move or receive a real account.
     const enrollment = await tx.device_enrollments.findUnique({ where: { device_hash: device.hash } });
     if (!enrollment || enrollment.qa_only || enrollment.platform !== device.platform ||
-        !sameDigest(enrollment.proof_hash, sha(credentials.device_proof))) throw denied();
-    return device;
+        !sameDigest(enrollment.proof_hash, sha(proof))) throw denied();
+  }
+
+  async transferBinding(tx: Tx, account_id: string, source: string, target: Device, now: Date) {
+    await tx.device_bindings.update({ where: { account_id_device_hash: { account_id, device_hash: source } },
+      data: { revoked_at: now } });
+    await tx.device_bindings.upsert({ where: { account_id_device_hash: { account_id, device_hash: target.hash } },
+      create: { id: uuid7(), account_id, device_hash: target.hash, platform: target.platform, bound_at: now },
+      update: { role: 'primary', bound_at: now, revoked_at: null } });
+    return (await revoke(tx, { account_id, device_hash: source }, 'transfer')).count;
+  }
+
+  async claimTransfer(tx: Tx, account_id: string, hash: string, boundAt: Date) {
+    const bound = await binding(tx, hash, account_id);
+    if (!bound || bound.account.status !== 'active' || bound.bound_at.getTime() !== boundAt.getTime()) throw denied();
+    const { id, role, device_hash, bound_at } = bound;
+    return { ...await this.session(tx, account_id, hash), account: accountView(bound.account),
+      device_binding: { id, role, device_hash, bound_at }, is_new_account: false };
   }
 
   // The caller holds the proved target-device and verified account locks.

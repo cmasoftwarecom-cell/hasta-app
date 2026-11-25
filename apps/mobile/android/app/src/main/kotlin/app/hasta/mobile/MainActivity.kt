@@ -20,6 +20,7 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        TransferApproval(this).register(flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.hasta.mobile/device")
             .setMethodCallHandler { call, result ->
                 if (call.method != "info") {

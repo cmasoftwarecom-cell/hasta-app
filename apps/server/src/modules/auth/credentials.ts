@@ -31,6 +31,8 @@ type Access = { sub: string; sid: string; hash: string };
 const header = Buffer.from('{"alg":"HS256","typ":"JWT"}').toString('base64url');
 const derived = (use: string) => createHmac('sha256', key('HASTA_AUTH_SECRET')).update(`hasta/v1/${use}`).digest();
 const signature = (use: string, data: string) => createHmac('sha256', derived(use)).update(data).digest();
+// Deterministic only for idempotent start replay. No QR secret is persisted or sealed.
+export const transferToken = (id: string) => `tt_${signature('qr-device-transfer', id).toString('base64url')}`;
 export function issue(kind: 'device' | 'access', data: Device | Access, seconds: number) {
   const payload = Buffer.from(JSON.stringify({ ...data, exp: Math.floor(Date.now() / 1000) + seconds })).toString('base64url');
   const body = `${header}.${payload}`;

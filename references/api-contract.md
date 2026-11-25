@@ -111,13 +111,16 @@ Errors: `404 not_found` if no active, verified linked account matches (copy guid
 
 | Endpoint | Auth | Body | Result |
 | --- | --- | --- | --- |
-| `POST /v1/auth/transfer/start` | auth (old device) | `{}` | `200 { "transfer_id":"…", "qr_payload":"{\"v\":1,\"token\":\"tt_…\"}", "expires_at":"…(+120s)" }` — rate limit 2 / 3 min |
-| `POST /v1/auth/transfer/redeem` | auth (new device) | `{ "token":"tt_…", "device_token":"dt_…" }` | `200 { "status":"awaiting_confirmation", "expires_at":"…" }` |
-| `POST /v1/auth/transfer/confirm` | auth (old device) | `{ "transfer_id":"…", "biometric_verified": true }` | `200 { "status":"confirmed", "new_device_bound_at":"…", "revoked_sessions": 4 }` |
-| `POST /v1/auth/transfer/reject` | auth (old device) | `{ "transfer_id":"…" }` | `200 { "status":"rejected" }` |
-| `GET /v1/auth/transfer/:id` | auth | — | `200 { "status":"pending|awaiting_confirmation|confirmed|rejected|expired" }` |
+| `POST /v1/auth/transfer/start` | source bearer + enrollment | `{ "approval_key":"…" }` | `200 { "transfer_id":"…", "qr_payload":"{\"v\":1,\"token\":\"tt_…\"}", "expires_at":"…(+120s)" }` · rate limit two starts per three minutes per account and installation |
+| `POST /v1/auth/transfer/redeem` | target enrollment only | `{ "token":"tt_…" }` | `200 { "transfer_id":"…", "status":"awaiting_confirmation", "expires_at":"…", "match_code":"…" }`; the QR token is now consumed |
+| `POST /v1/auth/transfer/confirm` | source bearer + enrollment | `{ "transfer_id":"…", "approval_signature":"…" }` | `200 { "status":"confirmed", "new_device_bound_at":"…", "revoked_sessions":4 }` |
+| `POST /v1/auth/transfer/reject` | source bearer + enrollment | `{ "transfer_id":"…" }` | `200 { "status":"rejected" }` |
+| `POST /v1/auth/transfer/claim` | same target enrollment | `{ "transfer_id":"…" }` | `200` guest-entry-shaped response for the existing account with `is_new_account:false`; never creates or merges accounts |
+| `GET /v1/auth/transfer/:id` | active source bearer | none | `200 { "status":"pending|awaiting_confirmation|confirmed|rejected|expired", "expires_at":"…" }`; `approval_challenge` and `match_code` are returned only while awaiting approval |
 
-Errors: `410 token_expired`, `409 token_used`, `409 guest_exists_on_target`, `403 biometric_required`.
+Every write adds `device_token` and `device_proof` to the body and requires `Idempotency-Key`. The source pins a base64url P-256 SPKI DER public key on start. On confirm, it supplies a base64url DER ECDSA/SHA-256 signature of the ASCII approval challenge obtained after the scan. Both devices must display the same `match_code` before approval. A client-supplied boolean is not accepted. Neither the QR payload nor the signature belongs in logs, clipboard, deep links, or device persistence.
+
+Errors include `410 token_expired`, `409 token_used`, `409 guest_exists_on_target` / `account_exists_on_target`, `409 request_in_progress`, and `403 biometric_required`. A same-key retry is scoped to the proved installation and cannot redeem a QR for a second installation or return revoked credentials. The original 120-second deadline is not extended by scanning. This slice is disabled by default; see [ADR-0015](../decisions/adr/ADR-0015-s2-qr-transfer.md) for polling, the approval trust boundary, and the release prerequisites.
 
 ### 1.9 Sessions & devices
 `GET /v1/auth/sessions` → list `{id, device_hash_short, platform, created_at, last_seen_at, current}`.

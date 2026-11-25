@@ -22,7 +22,13 @@ export class ReplayExpiry implements OnModuleInit, OnModuleDestroy {
 
   private schedule() {
     if (this.pending) return;
-    this.pending = this.purge().then(() => undefined, () => {
+    this.pending = this.purge().then(async () => {
+      // Keep terminal QR records no longer than the non-secret replay window.
+      const cutoff = new Date(Date.now() - 604_800_000);
+      await this.db.$executeRaw`DELETE FROM transfer_tokens WHERE id IN (
+        SELECT id FROM transfer_tokens WHERE expires_at <= ${cutoff}
+        ORDER BY expires_at LIMIT 500 FOR UPDATE SKIP LOCKED)`;
+    }).catch(() => {
       this.logger.warn('Auth replay expiry sweep failed; will retry.');
     }).finally(() => { this.pending = undefined; });
   }

@@ -150,6 +150,111 @@
         }
       }
     },
+    "/auth/transfer/start": {
+      "post": {
+        "tags": ["Auth"], "operationId": "startDeviceTransfer", "description": "Starts a 120-second QR transfer from the proved source device; limited to two starts per three minutes per account and installation.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "approval_key"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "approval_key": { "type": "string", "pattern": "^[A-Za-z0-9_-]{122}$", "description": "Base64url P-256 SPKI DER public key." } }
+        } } } },
+        "responses": {
+          "200": { "description": "Source-only QR payload; it must never be logged or stored by clients.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["transfer_id", "qr_payload", "expires_at"],
+              "properties": { "transfer_id": { "$ref": "#/components/schemas/Id" }, "qr_payload": { "type": "string", "description": "Serialized v1 QR JSON with one tt_ token." },
+                "expires_at": { "type": "string", "format": "date-time" } }
+            } } } },
+          "429": { "$ref": "#/components/responses/Throttled" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/redeem": {
+      "post": {
+        "tags": ["Auth"], "operationId": "redeemDeviceTransfer", "description": "The proved, unbound replacement installation consumes the QR token and waits for the source to approve. No credentials are returned.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "token"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "token": { "type": "string", "writeOnly": true, "pattern": "^tt_[A-Za-z0-9_-]{43}$" } }
+        } } } },
+        "responses": {
+          "200": { "description": "QR consumed by the replacement installation.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["transfer_id", "status", "expires_at", "match_code"],
+              "properties": { "transfer_id": { "$ref": "#/components/schemas/Id" }, "status": { "type": "string", "enum": ["awaiting_confirmation"] },
+                "expires_at": { "type": "string", "format": "date-time" }, "match_code": { "$ref": "#/components/schemas/TransferMatchCode" } }
+            } } } },
+          "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/confirm": {
+      "post": {
+        "tags": ["Auth"], "operationId": "confirmDeviceTransfer", "description": "Atomically moves the binding and revokes the source sessions after the proved source submits a signature over the scanned transfer's approval challenge.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "transfer_id", "approval_signature"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "transfer_id": { "$ref": "#/components/schemas/Id" },
+            "approval_signature": { "type": "string", "writeOnly": true, "pattern": "^[A-Za-z0-9_-]{11,96}$", "description": "Base64url DER ECDSA SHA-256 signature over the ASCII approval challenge." } }
+        } } } },
+        "responses": {
+          "200": { "description": "Transfer committed and old-device sessions revoked.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status", "new_device_bound_at", "revoked_sessions"],
+              "properties": { "status": { "type": "string", "enum": ["confirmed"] }, "new_device_bound_at": { "type": "string", "format": "date-time" },
+                "revoked_sessions": { "type": "integer", "minimum": 0 } }
+            } } } },
+          "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/reject": {
+      "post": {
+        "tags": ["Auth"], "operationId": "rejectDeviceTransfer", "description": "The proved source cancels a pending transfer without moving the account.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransferReference" } } } },
+        "responses": {
+          "200": { "description": "Transfer rejected.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status"],
+              "properties": { "status": { "type": "string", "enum": ["rejected"] } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/claim": {
+      "post": {
+        "tags": ["Auth"], "operationId": "claimDeviceTransfer", "description": "Issues a session only to the replacement installation recorded at redeem, after the source approves and before the transfer deadline.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransferReference" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Entered" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/{id}": {
+      "get": {
+        "tags": ["Auth"], "operationId": "getDeviceTransferStatus", "description": "Only the active source session can read the status and, after scan, the target-bound approval challenge.",
+        "security": [{ "Bearer": [] }],
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "$ref": "#/components/schemas/Id" } }],
+        "responses": {
+          "200": { "description": "Transfer status and deadline.",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status", "expires_at"],
+              "properties": { "status": { "type": "string", "enum": ["pending", "awaiting_confirmation", "confirmed", "rejected", "expired"] },
+                "expires_at": { "type": "string", "format": "date-time" },
+                "approval_challenge": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "match_code": { "$ref": "#/components/schemas/TransferMatchCode" } }
+            } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
     "/auth/sessions": {
       "get": {
         "tags": ["Auth"], "operationId": "listSessions", "description": "Lists active sessions for the current account without exposing a full device hash.",
@@ -241,6 +346,11 @@
     "schemas": {
       "Id": { "type": "string", "format": "uuid", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$" },
       "Proof": { "type": "string", "pattern": "^[0-9a-f]{64}$", "writeOnly": true },
+      "TransferReference": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "transfer_id"],
+        "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+          "transfer_id": { "$ref": "#/components/schemas/Id" } }
+      },
+      "TransferMatchCode": { "type": "string", "pattern": "^[0-9A-F]{8}$", "description": "Both devices must display the same code before the source approves." },
       "OauthChallenge": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
       "LinkDevice": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof"], "properties": {
         "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }
