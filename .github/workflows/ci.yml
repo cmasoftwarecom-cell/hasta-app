@@ -60,6 +60,7 @@ jobs:
           node-version: '20.20.2'
       - name: T20, T36, T37, T45, T48 and design tokens
         run: |
+          node --test tools/scripts/identity-gate.test.mjs
           node tools/scripts/static-gates.mjs
           node tools/scripts/design-tokens.mjs --check
       - name: T47 OpenAPI lint and breaking changes versus previous release
