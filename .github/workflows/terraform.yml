@@ -1,0 +1,56 @@
+name: Terraform (plan + validate)
+
+# hashicorp/setup-terraform@v3 targeted Node 20 and the repository is archived,
+# so no newer major will ever clear the deprecation banner. Replace it with a
+# pinned, checksum-verified binary download. Terraform stays on 1.9.x (provider
+# lock file is 1.9-compatible); do not float to "latest".
+
+on:
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
+      - '.github/workflows/terraform.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'infra/terraform/**'
+
+permissions:
+  contents: read
+
+env:
+  TERRAFORM_VERSION: '1.9.8'
+  TF_IN_AUTOMATION: 'true'
+
+jobs:
+  terraform:
+    name: plan
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: infra/terraform
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1 (Node 24)
+
+      - name: Install pinned Terraform binary (no setup-terraform action)
+        run: |
+          set -euo pipefail
+          ZIP="terraform_${TERRAFORM_VERSION}_linux_amd64.zip"
+          BASE="https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}"
+          curl -fsSLo "/tmp/${ZIP}" "${BASE}/${ZIP}"
+          curl -fsSLo /tmp/SHA256SUMS "${BASE}/terraform_${TERRAFORM_VERSION}_SHA256SUMS"
+          curl -fsSLo /tmp/SHA256SUMS.sig "${BASE}/terraform_${TERRAFORM_VERSION}_SHA256SUMS.sig"
+          echo "verifying checksum against the signed manifest"
+          grep "  ${ZIP}\$" /tmp/SHA256SUMS | sha256sum -c - -a --status \
+            || (cd /tmp && sha256sum -c <(grep "${ZIP}\$" SHA256SUMS))
+          unzip -o -q "/tmp/${ZIP}" -d /usr/local/bin
+          terraform version
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -no-color
+      - run: terraform validate -no-color
+
+      # State is real infrastructure: plan only, never apply from a workflow that
+      # has no environment gate. Staging/prod apply stays a protected deployment.
+      - name: Plan (draft PRs and main pushes only)
+        run: terraform plan -no-color -input=false
