@@ -81,6 +81,15 @@ test('T37: fail closed if a trust surface appears without a behavioural adapter'
   }), /identity module/);
 });
 
+test('T37: a literal Express colon cannot hide an undocumented completion route', async () => {
+  const text = String.raw`@Controller('v1/auth/identities/google') class Link {
+    @Post('link\\:complete') complete() {}
+  }`;
+  const sources = [source(`${identity}controller.ts`, text)];
+  await assert.rejects(checkIdentityGate({ sources }), /behavioural verifier/);
+  await checkIdentityGate({ sources, verification: { verify: verifierWithout(), expected: options } });
+});
+
 for (const claim of ['signature', 'iss', 'aud', 'exp', 'nonce', 'email_verified']) {
   test(`T37: adapter skipping ${claim} fails`, async () => {
     await assert.rejects(checkIdentityGate({

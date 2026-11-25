@@ -10,18 +10,18 @@
 - updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
 
 ## Position
-- current sprint: `S1 — guest auth` (five review fixes implemented in draft PR #2)
-- blocked by: iOS native CI verification (`T40/T41` against an isolated test API) and review of draft PR #2 before S2
+- current sprint: `S2 — Gmail linking and device change` (backend link/unlink guard and sessions API implemented; sprint remains open)
+- blocked by: completion and local QA of lost-device recovery, secure QR transfer, mobile Linked Accounts and Security/Devices flows, and the SPEC §17.2 friend-system scope. Keep Google linking disabled and do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
-- open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), S1 draft (`feature/HAS-1a-guest-auth`)
+- open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), existing draft, S1 plus partial S2 (`feature/HAS-1a-guest-auth`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints and diffs the OpenAPI contract against a release tag from the base history or the pinned S1 bootstrap under ADR-0010.
 
 ## Open test IDs
-T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. The CI entry point fails closed on linking/recovery completion or raw ID-token verification until S2 wires the real server verifier; S1 adds no Google routes, dependency, or runtime integration.
+T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. S1 had no Google runtime integration. S2 wires the server verifier into the existing fail-closed gate and uses locally signed tokens; HTTP tests map T37/T38/T39 for authenticated linking, no merge, and server proof verification. The sessions tests cover account scope, family revocation, current-session replay, and other-device revocation. These do not qualify the S2 mobile or recovery gates.
 
 P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility tap/hold actions in English and Myanmar during restore, on welcome, after an offline guest attempt, and after sign-out. Only Guest (when enabled) and Privacy are allowed; the separate build-gated QA hold remains covered by T36. Local temporary Google outlined and Apple icon actions on welcome both caused failures. A temporary Connect Gmail action in signed-in Settings passed; no linking UI or integration ships in S1.
 
@@ -37,6 +37,8 @@ P0-T40-T41-IOS-AUTH-503: the [failing simulator job](https://github.com/cmasoftw
 
 P0-T40-T41-IOS-NATIVE-FAIL: the [failed run](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45596133520/job/139142558785) built successfully, then timed out loading the Dart suite. CI now runs the same Dart target through hosted XCTest and requires one explicit passing scenario from Flutter's native results bridge. The bridge wait is bounded, and the isolated PostgreSQL assertions still run after the simulator test. A green macOS simulator run is still required.
 
+S1 verification update: [CI for `4d4220c`](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45602004923) passed, including [hosted T40/T41 XCTest](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45602004923/job/139163019376) and its isolated PostgreSQL assertions. This clears the previous simulator prerequisite, not signed distribution or physical-device QA. `T25–T30`, `T43–T44` remain open for S2. No local QA APK has been produced.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -50,6 +52,7 @@ P0-T40-T41-IOS-NATIVE-FAIL: the [failed run](https://github.com/cmasoftwarecom-c
 | S1 installation proof; replay retention and state; secure storage dependencies and QA fixture scope | proposed in PR #2 | [ADR-0009](../decisions/adr/ADR-0009-s1-enrollment-and-mobile.md) |
 | T47 frozen S1 contract until a previous release tag exists | proposed in PR #2 | [ADR-0010](../decisions/adr/ADR-0010-openapi-bootstrap-baseline.md) |
 | Primary-button semantic fills and canonical DS 1.0.1 source | proposed in PR #2 | [ADR-0011](../decisions/adr/ADR-0011-primary-button-token-source.md) |
+| S2 code-only Google consent, device proof, encrypted short-lived intent, rollout hold | proposed in PR #2 | [ADR-0012](../decisions/adr/ADR-0012-s2-google-link-boundary.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
@@ -62,7 +65,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta review PR #2
+Hasta S2
 ```
 
 ## Changelog (append one line per merged PR)

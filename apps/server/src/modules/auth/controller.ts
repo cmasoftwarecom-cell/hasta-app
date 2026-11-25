@@ -1,4 +1,4 @@
-import { Body, CanActivate, Controller, ExecutionContext, Get, Header, Headers, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, CanActivate, Controller, Delete, ExecutionContext, Get, Header, Headers, HttpCode, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { denied, failure, uuidPattern, verify } from './credentials';
 import { GuestAuth } from './service';
 const deviceToken = /^dt_[\w.-]{1,1024}$/;
@@ -13,8 +13,8 @@ const schemas = {
 };
 type Action = keyof typeof schemas;
 type Response = { setHeader(name: string, value: string): void };
-const bearer = (value?: string) => value?.match(/^Bearer ([\w.-]{1,1024})$/i)?.[1] ?? '';
-class AccessGuard implements CanActivate {
+export const bearer = (value?: string) => value?.match(/^Bearer ([\w.-]{1,1024})$/i)?.[1] ?? '';
+export class AccessGuard implements CanActivate {
   canActivate(ctx: ExecutionContext) {
     verify('access', bearer(ctx.switchToHttp().getRequest().headers.authorization));
     return true;
@@ -60,6 +60,32 @@ export class AuthController {
   @Get('me') @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
   me(@Headers('authorization') authorization: string) {
     return this.auth.me(bearer(authorization));
+  }
+  @Get('auth/sessions') @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
+  sessions(@Headers('authorization') authorization: string) {
+    return this.auth.listSessions(bearer(authorization));
+  }
+  @Delete('auth/sessions') @HttpCode(204) @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
+  deleteOthers(@Query('others') others: unknown, @Headers('device-token') token: string,
+    @Headers('device-proof') proof: string, @Headers('idempotency-key') key: string,
+    @Headers('authorization') authorization: string, @Res({ passthrough: true }) res: Response) {
+    if (others !== 'true') throw failure(400, 'validation_failed');
+    return this.deleteSession('others', token, proof, key, authorization, res);
+  }
+  @Delete('auth/sessions/:id') @HttpCode(204) @UseGuards(AccessGuard) @Header('Cache-Control', 'no-store')
+  deleteById(@Param('id') id: string, @Headers('device-token') token: string,
+    @Headers('device-proof') proof: string, @Headers('idempotency-key') key: string,
+    @Headers('authorization') authorization: string, @Res({ passthrough: true }) res: Response) {
+    if (!uuidPattern.test(id)) throw failure(400, 'validation_failed');
+    return this.deleteSession(id.toLowerCase(), token, proof, key, authorization, res);
+  }
+  private async deleteSession(target: string, device_token: string, device_proof: string, key: string,
+    authorization: string, res: Response) {
+    if (![device_token, device_proof, key].every((field) => typeof field === 'string') ||
+        !deviceToken.test(device_token) || !deviceProof.test(device_proof) || !uuidPattern.test(key))
+      throw failure(400, 'validation_failed');
+    if (await this.auth.revokeSession(bearer(authorization), { device_token, device_proof }, target, key.toLowerCase()))
+      res.setHeader('Idempotent-Replayed', 'true');
   }
   @Post('qa/guest') @HttpCode(200) @Header('Cache-Control', 'no-store')
   qa(@Body() body: unknown, @Headers('idempotency-key') key: string, @Res({ passthrough: true }) res: Response) {
