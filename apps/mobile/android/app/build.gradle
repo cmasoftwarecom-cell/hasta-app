@@ -29,6 +29,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        def recoveryHost = System.getenv("HASTA_RECOVERY_LINK_HOST") ?: "recovery.example.invalid"
+        if (!(recoveryHost ==~ /(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/) || recoveryHost.length() > 253) {
+            throw new GradleException("Invalid HASTA_RECOVERY_LINK_HOST")
+        }
+        manifestPlaceholders["hastaRecoveryHost"] = recoveryHost
     }
 
     // Release signing is not configured in S0. Never sign release with debug keys.
