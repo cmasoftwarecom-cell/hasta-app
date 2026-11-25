@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:mobile/core/design/tokens.dart';
@@ -41,6 +42,81 @@ class _GuestSession implements GuestSession {
 }
 
 void main() {
+  void setLargeTextViewport(WidgetTester tester) {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 568);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
+
+  testWidgets('T40 text-scale: fixed-height control overflows at 200%',
+      (tester) async {
+    setLargeTextViewport(tester);
+    await tester.pumpWidget(const MaterialApp(
+      home: Center(
+        child: SizedBox(
+          height: 24,
+          child: Column(children: [
+            Text('Guest profile', style: TextStyle(fontSize: 24)),
+          ]),
+        ),
+      ),
+    ));
+    expect(
+        tester.takeException().toString(), contains('RenderFlex overflowed'));
+  });
+
+  for (final language in ['en', 'my']) {
+    testWidgets('T40 text-scale: profile and Settings at 200% ($language)',
+        (tester) async {
+      setLargeTextViewport(tester);
+      final locale = Locale(language);
+      final copy = await AppLocalizations.delegate.load(locale);
+      final session = _GuestSession()..profile = const GuestProfile('guest');
+      await tester.pumpWidget(HastaApp(session: session, locale: locale));
+      await tester.pumpAndSettle();
+      final layoutIssues = <String>[];
+
+      void checkText(Finder texts) {
+        expect(texts, findsWidgets);
+        for (final element in texts.evaluate()) {
+          final widget = element.widget as Text;
+          final richText = find.descendant(
+            of: find.byWidget(widget),
+            matching: find.byType(RichText),
+          );
+          final paragraph = tester.renderObject<RenderParagraph>(richText);
+          if (MediaQuery.textScalerOf(element).scale(10) != 20) {
+            layoutIssues.add('${widget.data}: text scale is capped');
+          }
+          if (language == 'my') {
+            final span = paragraph.text as TextSpan;
+            expect(span.style!.height,
+                greaterThanOrEqualTo(HastaTokens.myanmarLineHeight));
+          }
+          if (paragraph.didExceedMaxLines ||
+              paragraph.size.height + 0.01 <
+                  paragraph.getMaxIntrinsicHeight(paragraph.size.width)) {
+            layoutIssues.add('${widget.data}: truncated or clipped');
+          }
+        }
+        expect(tester.takeException(), isNull);
+      }
+
+      checkText(find.text(copy.guestProfile));
+      checkText(find.text(copy.emptyProfile));
+      final settings = find.byTooltip(copy.settings);
+      await tester.ensureVisible(settings);
+      expect(settings.hitTestable(), findsOneWidget);
+      await tester.tap(settings);
+      await tester.pumpAndSettle();
+      checkText(find.text(copy.settings));
+      expect(layoutIssues, isEmpty);
+    });
+  }
+
   testWidgets('T40: sole guest entry, offline retry, profile and sign-out',
       (tester) async {
     final session = _GuestSession();

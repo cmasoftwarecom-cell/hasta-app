@@ -118,34 +118,47 @@ class _GuestScreenState extends State<GuestScreen> {
     final retry = _retry;
     final heading = Text(copy.appTitle, style: style.headlineMedium);
     return Scaffold(
-      appBar: profile == null
-          ? null
-          : AppBar(
-              title: Text(_settings ? copy.settings : copy.profile),
-              leading: _settings
-                  ? BackButton(
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _settings = false))
-                  : null,
-              actions: [
-                if (!_settings)
-                  IconButton(
-                      tooltip: copy.settings,
-                      icon: const Icon(Icons.settings_outlined),
-                      onPressed: _busy
-                          ? null
-                          : () => setState(() => _settings = true)),
-              ],
-            ),
       body: SafeArea(
-        child: Center(
+        child: Align(
+          alignment: profile == null ? Alignment.center : Alignment.topCenter,
           child: SingleChildScrollView(
             padding: EdgeInsets.all(space[7]),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (profile != null) ...[
+                  ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: space[10]),
+                    child: Row(
+                      children: [
+                        if (_settings)
+                          BackButton(
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() => _settings = false),
+                          ),
+                        Expanded(
+                          child: Semantics(
+                            header: true,
+                            child: Text(
+                                _settings ? copy.settings : copy.profile,
+                                style: style.titleLarge),
+                          ),
+                        ),
+                        if (!_settings)
+                          IconButton(
+                            tooltip: copy.settings,
+                            icon: const Icon(Icons.settings_outlined),
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() => _settings = true),
+                          ),
+                      ],
+                    ),
+                  ),
+                  SizedBox(height: space[4]),
+                ],
                 if (profile == null) ...[
                   if (_qa)
                     Listener(
@@ -171,15 +184,12 @@ class _GuestScreenState extends State<GuestScreen> {
                       child: Text(copy.signOut)),
                 ] else ...[
                   Text(profile.displayName ?? copy.guestProfile,
-                      style: style.titleLarge,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
+                      style: style.titleLarge),
                   Text(
-                      profile.username == null
-                          ? copy.emptyProfile
-                          : '@${profile.username}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis),
+                    profile.username == null
+                        ? copy.emptyProfile
+                        : '@${profile.username}',
+                  ),
                 ],
                 if (_busy) ...[
                   SizedBox(height: space[4]),
