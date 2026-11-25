@@ -42,7 +42,7 @@
       "bg.brandSubtle":     { "light": "#EAF1FE", "dark": "#16243D", "use": "selected row, mention" },
       "bg.brand":           { "light": "#4C5EF6", "dark": "#4C8DFF", "use": "PRIMARY button / brand fill — new in 1.0.1, replaces the text.link workaround (ADR-0005)" },
       "bg.brandPressed":    { "light": "#3D4EE0", "dark": "#7C8BFF", "use": "pressed primary (scale .98)" },
-      "bg.brandDisabled":   { "light": "#B9C2FF", "dark": "#4C8DFF", "opacity": 0.4, "use": "disabled primary" },
+      "bg.brandDisabled":   { "light": "#B9C2FF66", "dark": "#4C8DFF4D", "use": "disabled primary, 40% light / 30% dark" },
       "bg.dangerSubtle":    { "light": "#FDECEC", "dark": "#2A1518", "use": "destructive background" },
       "bg.datingSubtle":    { "light": "#FDECF1", "dark": "#2A1620", "use": "dating mode surface" },
       "text.primary":       { "light": "#111827", "dark": "#E8EDF4", "use": "body, title" },
