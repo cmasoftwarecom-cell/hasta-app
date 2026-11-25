@@ -8,6 +8,8 @@ COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
+ARG GIT_COMMIT
+RUN if [ -n "$GIT_COMMIT" ]; then printf '%s' "$GIT_COMMIT" > dist/build-commit; fi
 
 FROM node:20-bookworm-slim
 WORKDIR /app

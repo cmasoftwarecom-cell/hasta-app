@@ -66,7 +66,7 @@ curl --fail-with-body --max-time 10 -i "https://$STAGING_HOST/health"
 | --- | --- |
 | 01 · Routing | Confirm the intended public DNS target/proxy mode and the approved staging revision. |
 | 02 · TLS | HTTP redirects to HTTPS; HTTPS validates the chain, validity and hostname without a bypass. |
-| 03 · Health | Local backend and public `GET /health` both return `200` with `{"status":"ok"}`; `/v1/health` is not the probe. |
+| 03 · Health | Local backend and public `GET /health` return `200`. Staging returns `status: ok`, `env: staging`, and the exact full commit SHA from the image. Non-staging keeps the minimal probe. `/v1/health` is not the probe. |
 | 04 · Isolation | Confirm migrations, isolated DB/signing keys, no production users, and approved synthetic fixture scope before any write. |
 | 05 · Entry (T20/T37) | Welcome presents only Continue as the primary guest entry; no OTP or Google/Apple sign-in. |
 | 06 · Entry (T40) | Fresh native install: one tap opens the guest profile. Confirm `is_guest=true` and an active session using approved read-only telemetry. |
@@ -78,3 +78,18 @@ curl --fail-with-body --max-time 10 -i "https://$STAGING_HOST/health"
 | 12 · Offline | With a cached profile, disable networking and reopen. The profile is readable with an offline notice; reconnect and retry. |
 
 Run on Android and iOS where signed staging builds are available. Record any failures or untested cases; a green CI artifact scan does not substitute for the staging results.
+
+## Build and verify the staging image
+
+From a clean checkout of the approved revision, build from the server context:
+
+```sh
+sha="$(git rev-parse HEAD)"
+docker build --build-arg GIT_COMMIT="$sha" -t "hasta-api:$sha" apps/server
+```
+
+Use the approved isolated staging configuration with `HASTA_ENV=staging`. The SHA is baked into the image; setting `GIT_COMMIT` at container runtime does not change what `/health` reports. A staging image without a valid baked SHA returns HTTP 503. This check verifies the deployment's reported build identity, not database readiness or fixture isolation.
+
+```sh
+bash docs/repo-ready/verify-staging.sh "$STAGING_BASE_URL" "$sha"
+```

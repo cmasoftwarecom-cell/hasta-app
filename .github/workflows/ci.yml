@@ -39,6 +39,7 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           npm run test:smoke
+          node --test test/health.test.cjs
           node --test test/google-link.test.cjs
           node --test test/gmail-recovery.test.cjs
           node --test test/qr-transfer.test.cjs
@@ -51,7 +52,12 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
-          docker build --tag "hasta-server:${GITHUB_SHA}" apps/server
+          docker build --build-arg GIT_COMMIT="$GITHUB_SHA" --tag "hasta-server:${GITHUB_SHA}" apps/server
+          container="$(docker run -d --network host -e HASTA_ENV=staging -e HASTA_DATABASE_URL "hasta-server:${GITHUB_SHA}")"
+          trap 'docker rm -f "$container" >/dev/null' EXIT
+          curl --noproxy '*' --fail --silent --show-error --retry 10 --retry-connrefused \
+            --retry-delay 1 --max-time 5 http://127.0.0.1:3000/health |
+            jq -e --arg expected "$GITHUB_SHA" '. == {status:"ok", env:"staging", commit:$expected}'
 
   gates:
     runs-on: ubuntu-latest
