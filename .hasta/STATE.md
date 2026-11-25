@@ -22,6 +22,8 @@
 ## Open test IDs
 T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. The CI entry point fails closed on linking/recovery completion or raw ID-token verification until S2 wires the real server verifier; S1 adds no Google routes, dependency, or runtime integration.
 
+P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility tap/hold actions in English and Myanmar during restore, on welcome, after an offline guest attempt, and after sign-out. Only Guest (when enabled) and Privacy are allowed; the separate build-gated QA hold remains covered by T36. Local temporary Google outlined and Apple icon actions on welcome both caused failures. A temporary Connect Gmail action in signed-in Settings passed; no linking UI or integration ships in S1.
+
 T46 exercises an active refresh token on a different enrolled binding and checks HTTP 401, committed revocation of the entire family, and survival of unrelated sessions in isolated PostgreSQL 16.
 
 The DS widget gate checks the rendered `bg.brand`, `bg.brandPressed`, and `bg.brandDisabled` fills, and the generated disabled opacity for light, dark, and AMOLED. The tracked DS 1.0.1 source remains canonical under ADR-0011.

@@ -114,6 +114,61 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
+    testWidgets('T37: only Guest and Privacy actions before login ($language)',
+        (tester) async {
+      final locale = Locale(language);
+      final copy = await AppLocalizations.delegate.load(locale);
+      final session = _GuestSession();
+      await tester.pumpWidget(HastaApp(session: session, locale: locale));
+
+      // Check accessible actions, not button types or provider names. Keep
+      // this scoped to unauthenticated states so Settings can link Gmail.
+      void expectWelcomeActions({required bool canEnterGuest}) {
+        final actions = <String>[];
+        bool collect(SemanticsNode node) {
+          final data = node.getSemanticsData();
+          if (data.hasAction(SemanticsAction.tap)) {
+            actions.add('tap: ${data.label}');
+          }
+          if (data.hasAction(SemanticsAction.longPress)) {
+            actions.add('hold: ${data.label}');
+          }
+          node.visitChildren(collect);
+          return true;
+        }
+
+        collect(tester.binding.renderViews.single.owner!.semanticsOwner!
+            .rootSemanticsNode!);
+        expect(
+            actions,
+            unorderedEquals([
+              if (canEnterGuest) 'tap: ${copy.welcomeContinue}',
+              'tap: ${copy.privacyTerms}',
+            ]));
+      }
+
+      expectWelcomeActions(canEnterGuest: false);
+      await tester.pumpAndSettle();
+      expectWelcomeActions(canEnterGuest: true);
+
+      session.offline = true;
+      await tester.tap(find.text(copy.welcomeContinue));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.offline), findsOneWidget);
+      expectWelcomeActions(canEnterGuest: true);
+
+      session.offline = false;
+      await tester.tap(find.text(copy.welcomeContinue));
+      await tester.pumpAndSettle();
+      expect(session.lastLocale, language);
+      expect(find.text(copy.guestProfile), findsOneWidget);
+      await tester.tap(find.byTooltip(copy.settings));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(copy.signOut));
+      await tester.pumpAndSettle();
+      expectWelcomeActions(canEnterGuest: true);
+    });
+
     testWidgets('T40 text-scale: profile and Settings at 200% ($language)',
         (tester) async {
       setLargeTextViewport(tester);

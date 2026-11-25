@@ -95,12 +95,15 @@ jobs:
           cache: true
       - name: Install SQLite library for Linux repository tests
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-      - run: |
+      - name: Analyze and test mobile (including T37 guest-only entry)
+        run: |
           flutter pub get --enforce-lockfile
           flutter gen-l10n
           flutter analyze --no-pub
           flutter test --no-pub
           flutter test --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
+      - name: Build Android QA and release artifacts
+        run: |
           flutter build apk --debug --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
           flutter build apk --release --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
       - name: T36 and T45 check packaged text and compiled payloads
