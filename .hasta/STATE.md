@@ -11,7 +11,8 @@
 
 ## Position
 - current sprint: `S1 — guest auth` (five review fixes implemented in draft PR #2)
-- blocked by: iOS native CI verification, a verified staging HTTPS `/health` response, deployed staging QA, and review of PR #2 before S2
+- blocked by: iOS native CI verification (`T40/T41` against an isolated test API) and review of draft PR #2 before S2
+- active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
 - open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), S1 draft (`feature/HAS-1a-guest-auth`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
