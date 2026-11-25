@@ -19,47 +19,59 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment:
       name: staging                 # create in repo Settings > Environments, with required reviewers
       url: https://api-staging.hasta.app
     steps:
       - uses: actions/checkout@v4
-        with: { ref: '${{ inputs.ref }}' }
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          path: deployment-source
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Resolve revision
         id: sha
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          sha="$(git -C deployment-source rev-parse HEAD)"
+          git -C deployment-source merge-base --is-ancestor "$sha" origin/main || {
+            echo 'Deployment revision must already be merged into main.' >&2
+            exit 1
+          }
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Build image with baked GIT_COMMIT
+        env:
+          DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          docker build \
-            --build-arg GIT_COMMIT=${{ steps.sha.outputs.sha }} \
-            --build-arg BUILD_TIME=$(date -u +%FT%TZ) \
-            -t hasta-api:${{ steps.sha.outputs.sha }} .
-          docker save hasta-api:${{ steps.sha.outputs.sha }} | gzip > api.tar.gz
+          bash tools/scripts/deploy-staging.sh build "$DEPLOY_SHA" deployment-source "$RUNNER_TEMP/api.tar.gz"
 
-      - name: Ship + switch over (atomic symlink, keeps rollback target)
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.STAGING_SSH_HOST }}
-          username: ${{ secrets.STAGING_SSH_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          script_stop: true
-          script: |
-            set -e
-            mkdir -p /srv/hasta/releases/${{ steps.sha.outputs.sha }}
-            cat > /tmp/api.tar.gz < /dev/null   # uploaded by the next step (scp action)
-            cd /srv/hasta/releases/${{ steps.sha.outputs.sha }}
-            gunzip -c /tmp/api.tar.gz | docker load
-            docker stop hasta-api || true
-            docker rm hasta-api || true
-            docker run -d --name hasta-api --restart always \
-              --env-file /etc/hasta/api.env \
-              -p 127.0.0.1:3000:3000 \
-              hasta-api:${{ steps.sha.outputs.sha }}
-            echo ${{ steps.sha.outputs.sha }} > /srv/hasta/CURRENT
+      - name: Check health verifier tools
+        run: |
+          test -r docs/repo-ready/verify-staging.sh
+          if ! command -v dig >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y dnsutils
+          fi
+          command -v dig && command -v jq && command -v curl
+
+      - name: Transfer image and replace staging container
+        env:
+          DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
+          STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          STAGING_SSH_KNOWN_HOSTS: ${{ vars.STAGING_SSH_KNOWN_HOSTS }}
+        run: bash tools/scripts/deploy-staging.sh ship "$DEPLOY_SHA" "$RUNNER_TEMP/api.tar.gz"
 
       - name: Health contract (200 + SHA + env echo)
+        env:
+          DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          bash scripts/verify-staging.sh https://api-staging.hasta.app ${{ steps.sha.outputs.sha }}
+          bash docs/repo-ready/verify-staging.sh https://api-staging.hasta.app "$DEPLOY_SHA"

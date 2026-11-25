@@ -119,22 +119,11 @@ not exist while **S1 is still open**. Fix either:
   instead of hanging 12 min.
 
 ## GitHub Actions deploy-staging.yml (so deployments are recorded, not just Pages)
-```yaml
-name: deploy-staging
-on:
-  push:
-    branches: [ main ]
-jobs:
-  deploy:
-    environment: staging        # creates a real staging deployment record
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: ssh hasta@149.28.136.202 'cd ~/hasta && git pull && npm ci && npm run build && pm2 restart hasta-api --update-env'
-        # GIT_COMMIT baked from ${{ github.sha }} into .env during deploy
-```
-After this workflow runs once, GitHub deployment records will list a `staging`
-deployment (not only GitHub Pages), and the deployed SHA is registered.
+
+- Dispatch `.github/workflows/deploy-staging.yml` from `main` only. Configure the `staging` environment with required reviewers and restrict its deployment branches to `main`. Select a full SHA already merged into `main` that includes the staging health contract (PR #5). The workflow fails before SSH if the built image does not report that baked SHA.
+- Keep the existing `STAGING_SSH_HOST`, `STAGING_SSH_USER`, and `STAGING_SSH_KEY` environment secrets. Set the `staging` environment variable `STAGING_SSH_KNOWN_HOSTS` to the trusted OpenSSH `known_hosts` entry verified out of band; do not pin a key learned from the deploy connection itself.
+- The authorized staging SSH user needs Docker access, write access under `/srv/hasta`, and read access to `/etc/hasta/api.env`. The env file must declare `HASTA_ENV=staging` and use isolated staging services. The workflow retains the archive under `/srv/hasta/releases/<sha>/` and starts the new container on host loopback. There is no automatic rollback if the external health check fails; use the previous approved archive and verify that revision before resuming QA.
+- The job invokes `docs/repo-ready/verify-staging.sh` against the configured public staging endpoint after the switch. A GitHub deployment record alone is not proof that the selected SHA serves traffic; require a passing health check and separate isolation evidence.
 
 ## Ready-when checklist (all green -> run QA)
 - [ ] `dig +short api.nexusmmr.com` returns 149.28.136.202 (no NXDOMAIN)
