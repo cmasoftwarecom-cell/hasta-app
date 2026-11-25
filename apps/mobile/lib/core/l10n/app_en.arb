@@ -4,7 +4,7 @@
   "genericError": "Something went wrong. Try again in a moment. (E-500)",
   "welcomeContinue": "Continue",
   "welcomeGuest": "No email or phone number needed. Get started on this device.",
-  "guestRisk": "If you lose this device, you may lose access to this guest account.",
+  "guestRisk": "If you lose this device without linking Gmail, you can’t recover this account.",
   "privacyTerms": "Privacy & Terms",
   "privacySummary": "To keep your guest account on this device, Hasta uses a device identifier and stores your credentials securely. This preview does not include final privacy and terms documents.",
   "close": "Close",

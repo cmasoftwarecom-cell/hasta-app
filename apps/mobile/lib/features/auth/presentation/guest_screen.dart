@@ -251,6 +251,8 @@ class _GuestScreenState extends State<GuestScreen> {
                     heading,
                   SizedBox(height: space[4]),
                   Text(copy.welcomeGuest),
+                  SizedBox(height: space[4]),
+                  Text(copy.guestRisk),
                   SizedBox(height: space[6]),
                 ] else if (_settings) ...[
                   Text(copy.account, style: style.titleLarge),

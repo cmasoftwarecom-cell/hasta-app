@@ -114,6 +114,27 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
+    testWidgets('T30/T40: Welcome explains unlinked account loss ($language)',
+        (tester) async {
+      setLargeTextViewport(tester);
+      final locale = Locale(language);
+      final session = _GuestSession();
+      await tester.pumpWidget(HastaApp(session: session, locale: locale));
+      await tester.pumpAndSettle();
+
+      final warning = find.text(language == 'en'
+          ? 'If you lose this device without linking Gmail, you can’t recover this account.'
+          : 'ဖုန်းပျောက်ပါက ဤအကောင့်ကို ပြန်ရနိုင်မည် မဟုတ်ပါ။ Gmail ချိတ်ဆက်ထားရန် အကြံပြုသည်။');
+      expect(warning, findsOneWidget);
+      await tester.ensureVisible(warning);
+      expect(warning.hitTestable(), findsOneWidget);
+      final paragraph = tester.renderObject<RenderParagraph>(warning);
+      expect(paragraph.maxLines, isNull);
+      expect(paragraph.text.style!.height, greaterThanOrEqualTo(1.65));
+      expect(tester.takeException(), isNull);
+      expect(session.lastLocale, isNull);
+    });
+
     testWidgets('T37: only Guest and Privacy actions before login ($language)',
         (tester) async {
       final locale = Locale(language);
