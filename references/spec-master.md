@@ -1376,4 +1376,4 @@ For every feature deliver:
 
 ---
 
-_End of Hasta v1.0.0 Master PRD (SPEC 1.0.1)._
+_End of Hasta v1.0.0 Master PRD (SPEC 1.0.2)._

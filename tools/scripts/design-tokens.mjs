@@ -14,7 +14,7 @@ const argb = (hex, opacity) => {
 const palette = (theme) => [
   `  static const ${theme} = <String, Color>{`,
   ...Object.entries(color).map(([name, pair]) =>
-    `    '${name}': ${argb(pair[theme] ?? pair.dark, theme !== 'light' ? pair.opacity : null)},`),
+    `    '${name}': ${argb(pair[theme] ?? pair.dark, pair.opacity)},`),
   '  };',
 ];
 const { scale, myanmarRules } = source.typography;

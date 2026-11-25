@@ -233,7 +233,8 @@ class GuestRepository implements GuestSession {
     }
   }
 
-  Future<GmailRecoveryConsent> beginGmailRecovery(Uri trustedRedirect) async {
+  Future<GmailRecoveryConsent> beginGmailRecovery(Uri trustedRedirect,
+      {String? linkAccountId}) async {
     if (trustedRedirect.scheme != 'https' ||
         trustedRedirect.host.isEmpty ||
         trustedRedirect.userInfo.isNotEmpty ||
@@ -241,13 +242,19 @@ class GuestRepository implements GuestSession {
         trustedRedirect.hasFragment) {
       throw const AuthFailure('configuration');
     }
+    final source =
+        linkAccountId == null ? null : await _activeLinkSource(linkAccountId);
     final proof = await _proof();
-    final device = await _deviceToken(proof);
-    return _write('auth/recover:start', {
-      'provider': 'google',
-      'device_token': device,
-      'device_proof': proof,
-    }, (reply) async {
+    return _write(
+        source == null
+            ? 'auth/recover:start'
+            : 'auth/identities/google/link:start',
+        {
+          if (source == null) 'provider': 'google',
+          'device_token':
+              source == null ? await _deviceToken(proof) : source['device'],
+          'device_proof': proof,
+        }, (reply) async {
       final rawUrl = reply['auth_url'];
       final state = reply['state'];
       final nonce = reply['nonce'];
@@ -289,6 +296,56 @@ class GuestRepository implements GuestSession {
           redirectUri: trustedRedirect,
           state: state,
           expiresAt: DateTime.now().add(Duration(seconds: ttl)));
+    }, access: source?['access'] as String?);
+  }
+
+  String _maskedGmail(Object? value) {
+    if (value case {'provider': 'google', 'email_masked': final String masked}
+        when RegExp(r'^(?:[^@\s]\*\*\*@[^@\s]+|\*\*\*)$').hasMatch(masked)) {
+      return masked;
+    }
+    throw const AuthFailure('link_reply_invalid');
+  }
+
+  Future<Document> _activeLinkSource(String accountId) async {
+    await _transferSource(accountId);
+    if ((await restore())?.accountId != accountId) {
+      throw const AuthFailure('unauthenticated', status: 401);
+    }
+    return _transferSource(accountId);
+  }
+
+  Future<String?> linkedGmail(String accountId) async {
+    final source = await _activeLinkSource(accountId);
+    final identity = (await _request('auth/identities/google',
+        access: source['access'] as String))['identity'];
+    return identity == null ? null : _maskedGmail(identity);
+  }
+
+  Future<String> finishGmailLink(
+      String accountId, GmailRecoveryConsent consent, Uri callback) async {
+    final code = consent.acceptCallback(callback);
+    final source = await _transferSource(accountId);
+    // Reconcile uncertain outcomes by reading status, not by replaying this
+    // one-time code. Keep the wire idempotency key but do not persist it.
+    return _request('auth/identities/google/link:complete',
+        key: _uuid7(),
+        access: source['access'] as String,
+        body: {
+          'device_token': source['device'],
+          'device_proof': await _proof(),
+          'state': consent.state,
+          'code': code,
+        }).then((reply) {
+      if (reply['account'] case {'id': final String id, 'is_guest': false}
+          when id == accountId) {
+        return _maskedGmail(reply['identity']);
+      }
+      throw const AuthFailure('link_reply_invalid');
+    }).onError<AuthFailure>((error, stack) {
+      // Refresh rotates the session ID. This consent cannot follow it.
+      if (error.status == 401) throw const AuthFailure('gmail_link_restart');
+      Error.throwWithStackTrace(error, stack);
     });
   }
 
@@ -320,9 +377,11 @@ class GuestRepository implements GuestSession {
     });
   }
 
-  Future<Document> _transferSource() async {
+  Future<Document> _transferSource([String? accountId]) async {
     final current = await _session();
-    if (current == null || current['qa'] == true) {
+    if (current == null ||
+        current['qa'] == true ||
+        (accountId != null && current['account_id'] != accountId)) {
       throw const AuthFailure('unauthenticated', status: 401);
     }
     return current;

@@ -1,6 +1,6 @@
 import { HttpException, Inject, Injectable } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { failure, seal, sha, uuid7 } from '../auth/credentials';
+import { failure, seal, sha, uuid7, verify } from '../auth/credentials';
 import { GuestAuth } from '../auth/service';
 import { GoogleOAuth, googleScopes } from './google-oauth';
 import { consentLock as lock, consentSeconds as ttlSeconds, ConsentSecret as Intent, ConsentTx as Tx,
@@ -25,8 +25,18 @@ export class GoogleLinks {
   constructor(private readonly db: PrismaClient, private readonly auth: GuestAuth,
     @Inject(GOOGLE_LINK) private readonly provider: () => GoogleOAuth) {}
 
+  async status(bearer: string) {
+    const account = await this.auth.current(this.db, verify('access', bearer));
+    const identity = await this.db.identities.findFirst({
+      where: { account_id: account.id, provider: 'google', email_verified: true },
+      select: { email: true, linked_at: true },
+    });
+    return { identity: identity ? { provider: 'google', email_masked: maskEmail(identity.email),
+      linked_at: identity.linked_at } : null };
+  }
+
   private async actor(tx: Tx, bearer: string, credentials: Credentials) {
-    const actor = await this.auth.provedActor(tx, bearer, credentials);
+    const actor = await this.auth.provedActor(tx, bearer, credentials, { realOnly: true });
     await this.auth.current(tx, actor);
     return actor;
   }
@@ -131,7 +141,7 @@ export class GoogleLinks {
   }
 }
 
-function maskEmail(email: string) {
-  const [local, domain] = email.split('@');
+function maskEmail(email: string | null) {
+  const [local, domain] = email?.split('@') ?? [];
   return local && domain ? `${Array.from(local)[0]}***@${domain}` : '***';
 }

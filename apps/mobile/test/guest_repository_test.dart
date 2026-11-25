@@ -1,10 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/auth/data/guest_repository.dart';
+import 'package:mobile/features/auth/data/native_recovery_browser.dart';
 import 'package:mobile/features/auth/data/profile_cache.dart';
 import 'package:mobile/features/auth/domain/guest_session.dart';
+
+class _LoopbackBinding extends AutomatedTestWidgetsFlutterBinding {
+  @override
+  bool get overrideHttpClient => false;
+}
 
 class _MemoryCredentials implements CredentialStore {
   final values = <String, String>{};
@@ -23,6 +31,152 @@ class _MemoryCredentials implements CredentialStore {
 }
 
 void main() {
+  _LoopbackBinding();
+
+  test('T37: real Gmail link flow cancels before submit and completes once',
+      () async {
+    const channel = MethodChannel('app.hasta.mobile/recovery');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final redirect = Uri.https('link.example.test', '/auth/recovery/callback');
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final credentials = _MemoryCredentials();
+    final repository = GuestRepository(
+      baseUrl: 'http://127.0.0.1:${server.port}',
+      credentials: credentials,
+      cache: ProfileCache.memory(),
+      deviceInfo: () async => {
+        'raw_device_id': 'fixture-device',
+        'platform': 'android',
+        'os_version': '33',
+      },
+    );
+    addTearDown(repository.close);
+    final flow = GmailLinkFlow(repository);
+    addTearDown(flow.cancel);
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    var opened = Completer<Uri>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'trustedRedirect') return redirect.toString();
+      if (call.method == 'openConsent') {
+        opened.complete(Uri.parse(call.arguments as String));
+        return null;
+      }
+      throw MissingPluginException(call.method);
+    });
+
+    final account = {'id': 'guest', 'display_name': 'Traveler'};
+    final identity = {
+      'provider': 'google',
+      'email_masked': 'a***@example.test'
+    };
+    final linkRequests = <(String, String?, String?, Document)>[];
+    final phases = <String>[];
+    final nonce = ''.padLeft(43, 'n');
+    server.listen((request) async {
+      final path = request.uri.path;
+      final body = request.method == 'POST'
+          ? jsonDecode(await utf8.decoder.bind(request).join()) as Document
+          : <String, dynamic>{};
+      if (path.startsWith('/v1/auth/identities/google/link:')) {
+        linkRequests.add((
+          path,
+          request.headers.value('authorization'),
+          request.headers.value('idempotency-key'),
+          body
+        ));
+      }
+      final state = linkRequests.length.toString().padLeft(43, 's');
+      final reply = switch (path) {
+        '/v1/auth/device/register' => {'device_token': 'fixture-binding'},
+        '/v1/auth/guest' => {
+            'account': account,
+            'access_token': 'fixture-access',
+            'refresh_token': 'fixture-refresh',
+          },
+        '/v1/me' => {'account': account, 'profile': account},
+        '/v1/auth/identities/google/link:start' => {
+            'state': state,
+            'nonce': nonce,
+            'expires_in': 300,
+            'auth_url': Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+              'state': state,
+              'nonce': nonce,
+              'redirect_uri': redirect.toString(),
+              'response_type': 'code',
+              'code_challenge_method': 'S256',
+            }).toString(),
+          },
+        '/v1/auth/identities/google/link:complete' => {
+            'account': {...account, 'is_guest': false},
+            'identity': identity,
+          },
+        _ => null,
+      };
+      if (path.endsWith('/link:complete')) phases.add('complete');
+      request.response
+        ..statusCode = reply == null ? 404 : 200
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode(reply));
+      await request.response.close();
+    });
+
+    await repository.enter('en');
+    final before = Map.of(credentials.values);
+    final cancelled = expectLater(
+      flow.connect('guest', onSubmitting: () => phases.add('submitting')),
+      throwsA(isA<AuthFailure>()
+          .having((error) => error.code, 'code', 'recovery_cancelled')),
+    );
+    final firstConsent = await opened.future;
+    flow.cancel();
+    await cancelled;
+    expect(phases, isEmpty);
+    expect(linkRequests.map((request) => request.$1),
+        ['/v1/auth/identities/google/link:start']);
+
+    opened = Completer<Uri>();
+    final linked = flow.connect('guest', onSubmitting: () {
+      phases.add('submitting');
+      flow.cancel(); // Cancellation is no longer available at this boundary.
+    });
+    final secondConsent = await opened.future;
+    final state = secondConsent.queryParameters['state'];
+    expect(state, isNot(firstConsent.queryParameters['state']));
+    final callback =
+        redirect.replace(queryParameters: {'state': state!, 'code': 'code'});
+    for (final uri in [
+      callback.replace(query: 'state=stale&code=code'),
+      callback,
+      callback
+    ]) {
+      await messenger.handlePlatformMessage(
+        channel.name,
+        const StandardMethodCodec()
+            .encodeMethodCall(MethodCall('callback', uri.toString())),
+        (_) {},
+      );
+    }
+    expect(await linked, identity['email_masked']);
+    expect(phases, ['submitting', 'complete']);
+    expect(linkRequests.map((request) => request.$1), [
+      '/v1/auth/identities/google/link:start',
+      '/v1/auth/identities/google/link:start',
+      '/v1/auth/identities/google/link:complete',
+    ]);
+    expect(linkRequests.map((request) => request.$2).toSet(),
+        {'Bearer fixture-access'});
+    expect(linkRequests.map((request) => request.$3).toSet(), hasLength(3));
+    expect(linkRequests.map((request) => request.$3), everyElement(isNotNull));
+    expect(linkRequests.last.$4, {
+      ...linkRequests[1].$4,
+      'state': state,
+      'code': 'code',
+    });
+    expect(credentials.values, before);
+  }, timeout: const Timeout(Duration(seconds: 15)));
+
   test('T30/T37: recovery callback is scoped and stores only the new session',
       () async {
     final secure = _MemoryCredentials();
@@ -146,7 +300,7 @@ void main() {
   });
 
   test(
-      'T40/T41/T42: proof durability, lost response retry, refresh, cache and logout',
+      'T37/T40/T41/T42: device-bound refresh before Gmail link, cache and logout',
       () async {
     final secure = _MemoryCredentials();
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -155,6 +309,9 @@ void main() {
     final requests = <(String, String?, String?, Document)>[];
     var dropRegister = true;
     var rejectAccess = true;
+    Map<String, String>? credentialsAtAmbiguousCompletion;
+    var refreshes = 0, starts = 0;
+    final redirect = Uri.https('callback.example.invalid', '/recover');
     final account = {
       'id': 'guest',
       'display_name': 'Traveler',
@@ -185,8 +342,45 @@ void main() {
         response.write(jsonEncode({'account': account, 'profile': account}));
       } else if (path.endsWith('/refresh')) {
         rejectAccess = false;
-        response.write(jsonEncode(
-            {'access_token': 'next', 'refresh_token': 'next-refresh'}));
+        refreshes++;
+        response.write(jsonEncode({
+          'access_token': 'next-$refreshes',
+          'refresh_token': 'next-refresh-$refreshes',
+        }));
+      } else if (path.endsWith('/link:start') && !rejectAccess) {
+        final state = (++starts).toString().padLeft(43, 'a');
+        final nonce = ''.padLeft(43, 'b');
+        response.write(jsonEncode({
+          'state': state,
+          'nonce': nonce,
+          'expires_in': 300,
+          'auth_url': Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+            'state': state,
+            'nonce': nonce,
+            'redirect_uri': redirect.toString(),
+            'response_type': 'code',
+            'code_challenge_method': 'S256',
+          }).toString(),
+        }));
+      } else if (path.endsWith('/link:complete') && !rejectAccess) {
+        credentialsAtAmbiguousCompletion = Map.of(secure.values);
+        response.statusCode = 503;
+        response.write(jsonEncode({
+          'error': {'code': 'unavailable'}
+        }));
+      } else if (path == '/v1/auth/identities/google') {
+        response.write(jsonEncode({
+          'identity': {
+            'provider': 'google',
+            'email_masked': 'a***@example.test'
+          }
+        }));
+      } else if (path.endsWith('/link:start') ||
+          path.endsWith('/link:complete')) {
+        response.statusCode = 401;
+        response.write(jsonEncode({
+          'error': {'code': 'unauthenticated'}
+        }));
       } else if (path.endsWith('/logout')) {
         response.statusCode = 204;
       } else {
@@ -228,15 +422,49 @@ void main() {
     expect((await second.cached())?.displayName, 'Traveler');
     expect((await db.load('guest'))!.toJson(),
         {'accountId': 'guest', 'displayName': 'Traveler', 'username': null});
-    expect((await second.restore())?.accountId, 'guest');
+    final consent =
+        await second.beginGmailRecovery(redirect, linkAccountId: 'guest');
+    expect(requests.last.$3, 'Bearer next-1');
     final refresh = requests.firstWhere((item) => item.$1.endsWith('/refresh'));
     expect(refresh.$4, {
       'device_token': 'device',
       'device_proof': proof,
       'refresh_token': 'refresh'
     });
+    rejectAccess = true;
+    final callback = redirect.replace(
+        queryParameters: {'state': consent.state, 'code': 'local-code'});
+    await expectLater(
+        second.finishGmailLink('guest', consent, callback),
+        throwsA(isA<AuthFailure>()
+            .having((error) => error.code, 'code', 'gmail_link_restart')));
+    expect(requests.last.$3, 'Bearer next-1');
+    expect(refreshes, 1,
+        reason: 'never rotate and replay a consent completion');
+    final restarted =
+        await second.beginGmailRecovery(redirect, linkAccountId: 'guest');
+    expect(restarted.state, isNot(consent.state));
+    expect(requests.last.$3, 'Bearer next-2');
+    final beforeCompletion = Map.of(secure.values);
+    final restartedCallback = redirect.replace(
+        queryParameters: {'state': restarted.state, 'code': 'new-code'});
+    await expectLater(
+        second.finishGmailLink('guest', restarted, restartedCallback),
+        throwsA(
+            isA<AuthFailure>().having((error) => error.status, 'status', 503)));
+    expect(secure.values, beforeCompletion,
+        reason: 'an ambiguous completion must not leave a pending key');
+    expect(credentialsAtAmbiguousCompletion, beforeCompletion,
+        reason: 'a non-replayed completion needs no key in secure storage');
+    final beforeStatusRead = requests.length;
+    expect(await second.linkedGmail('guest'), 'a***@example.test');
+    expect(requests.skip(beforeStatusRead).map((request) => request.$1),
+        ['/v1/me', '/v1/auth/identities/google']);
+    expect(requests.last.$2, isNull);
+    expect(requests.last.$3, 'Bearer next-2');
+    expect((await second.cached())?.accountId, 'guest');
     await second.signOut();
-    expect(requests.last.$3, 'Bearer next');
+    expect(requests.last.$3, 'Bearer next-2');
     expect(requests.last.$4['device_proof'], proof);
     expect(await second.cached(), isNull);
     expect(await db.load('guest'), isNull);

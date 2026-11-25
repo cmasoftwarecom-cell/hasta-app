@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:mobile/core/design/tokens.dart';
+import 'package:mobile/features/auth/data/native_recovery_browser.dart';
 import 'package:mobile/features/auth/domain/guest_session.dart';
 import 'package:mobile/main.dart';
 
@@ -39,6 +42,50 @@ class _GuestSession implements GuestSession {
 
   @override
   Future<void> close() async {}
+}
+
+class _GmailActions implements GmailLinkActions {
+  final network = StreamController<bool>.broadcast();
+  bool offline = true;
+  bool expireFirstAttempt = true;
+  String? connectedAccount;
+  Completer<void>? consent;
+  Completer<String>? completion;
+  String? linkedEmail;
+  int statusReads = 0;
+  int submissions = 0;
+
+  @override
+  Stream<bool> get networkAvailable => network.stream;
+
+  @override
+  Future<String?> status(String accountId) async {
+    statusReads++;
+    if (offline) throw const AuthFailure('network', offline: true);
+    return linkedEmail;
+  }
+
+  @override
+  Future<String> connect(String accountId,
+      {required void Function() onSubmitting}) async {
+    if (expireFirstAttempt) {
+      expireFirstAttempt = false;
+      throw const AuthFailure('gmail_link_restart');
+    }
+    if (consent case final pending?) await pending.future;
+    onSubmitting();
+    submissions++;
+    connectedAccount = accountId;
+    if (completion case final pending?) return pending.future;
+    return 'a***@example.invalid';
+  }
+
+  @override
+  void cancel() {
+    if (consent case final pending? when !pending.isCompleted) {
+      pending.completeError(const AuthFailure('recovery_cancelled'));
+    }
+  }
 }
 
 void main() {
@@ -80,11 +127,10 @@ void main() {
     expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
   });
 
-  test('DS primary fill: disabled opacity is 40% light and 30% dark/AMOLED',
-      () {
+  test('DS 1.0.2 primary fill: disabled opacity is 40% in all palettes', () {
     expect(HastaTokens.light['bg.brandDisabled']!.alpha, (255 * .4).round());
-    expect(HastaTokens.dark['bg.brandDisabled']!.alpha, (255 * .3).round());
-    expect(HastaTokens.amoled['bg.brandDisabled']!.alpha, (255 * .3).round());
+    expect(HastaTokens.dark['bg.brandDisabled']!.alpha, (255 * .4).round());
+    expect(HastaTokens.amoled['bg.brandDisabled']!.alpha, (255 * .4).round());
   });
 
   void setLargeTextViewport(WidgetTester tester) {
@@ -114,6 +160,112 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
+    testWidgets('T37: Cancel only before Gmail submission ($language)',
+        (tester) async {
+      final copy = await AppLocalizations.delegate.load(Locale(language));
+      final gmail = _GmailActions()
+        ..offline = false
+        ..expireFirstAttempt = false
+        ..consent = Completer<void>();
+      addTearDown(gmail.network.close);
+      await tester.pumpWidget(HastaApp(
+          session: _GuestSession(), locale: Locale(language), gmail: gmail));
+      await tester.pumpAndSettle();
+      for (final target in [
+        find.text(copy.welcomeContinue),
+        find.byTooltip(copy.settings),
+        find.text(copy.linkedAccounts),
+      ]) {
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+      }
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      final connect = find.widgetWithText(FilledButton, copy.connectGmail);
+      final cancel = find.text(copy.gmailCancel);
+      await tester.tap(connect);
+      await tester.pump();
+      expect(cancel, findsOneWidget);
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(gmail.connectedAccount, isNull);
+
+      gmail.consent = Completer<void>();
+      gmail.completion = Completer<String>();
+      await tester.tap(connect);
+      await tester.pump();
+      gmail.consent!.complete();
+      await tester.pump();
+      expect(gmail.connectedAccount, 'guest');
+      expect(cancel, findsNothing);
+      expect(find.text(copy.gmailFinishing), findsOneWidget);
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+
+      const masked = 'a***@example.invalid';
+      if (language == 'en') gmail.linkedEmail = masked;
+      gmail.completion!
+          .completeError(const AuthFailure('network', offline: true));
+      await tester.pumpAndSettle();
+      expect(gmail.statusReads, 2,
+          reason: 'reconcile using an authenticated read');
+      if (language == 'my') {
+        expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+        expect(find.text(copy.gmailStatusUnknown), findsOneWidget);
+        gmail.linkedEmail = masked;
+        await tester.tap(find.text(copy.gmailCheckStatus));
+        await tester.pumpAndSettle();
+        expect(gmail.statusReads, 3);
+      }
+      expect(find.text(copy.gmailLinked(masked)), findsOneWidget);
+      expect(gmail.submissions, 1);
+    });
+
+    testWidgets('T37/T43: Gmail reacts to offline transitions ($language)',
+        (tester) async {
+      final copy = await AppLocalizations.delegate.load(Locale(language));
+      final gmail = _GmailActions();
+      addTearDown(gmail.network.close);
+      Future<void> tap(Finder target) async {
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(HastaApp(
+          session: _GuestSession(), locale: Locale(language), gmail: gmail));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.connectGmail), findsNothing);
+      await tap(find.text(copy.welcomeContinue));
+      await tap(find.byTooltip(copy.settings));
+      await tap(find.text(copy.linkedAccounts));
+      final connect = find.widgetWithText(FilledButton, copy.connectGmail);
+      expect(find.text(copy.offline), findsOneWidget);
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      gmail.offline = false;
+      await tap(find.text(copy.retry));
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(connect).onPressed, isNotNull);
+      gmail.network.add(false);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      expect(find.text(copy.offline), findsOneWidget);
+      await tester.tap(connect, warnIfMissed: false);
+      expect(gmail.expireFirstAttempt, isTrue, reason: 'no OAuth call');
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      expect(find.text(copy.offline), findsNothing);
+      await tap(connect);
+      expect(find.text(copy.gmailRestart), findsOneWidget);
+      await tap(connect);
+      expect(gmail.connectedAccount, 'guest');
+      expect(
+          find.text(copy.gmailLinked('a***@example.invalid')), findsOneWidget);
+      expect(find.text(copy.gmailUnlinkGuard), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(gmail.network.hasListener, isFalse);
+    });
+
     testWidgets('T30/T40: Welcome explains unlinked account loss ($language)',
         (tester) async {
       setLargeTextViewport(tester);

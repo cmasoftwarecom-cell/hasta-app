@@ -84,11 +84,14 @@ Request `{ "refresh_token": "rt_…", "device_token": "dt_…", "device_proof": 
 
 ### 1.6 Gmail linking
 
+`GET /v1/auth/identities/google` — auth. Returns `{ "identity": null }` or the signed-in account's masked identity. This leaves the frozen S1 `/me` response unchanged.
+
 `POST /v1/auth/identities/google/link:start` — auth
+Request `{ "device_token": "dt_…", "device_proof": "…" }`, with `Idempotency-Key`.
 → `200 { "state": "…", "nonce": "…", "scopes": ["openid","email","profile"], "auth_url": "https://accounts.google.com/o/oauth2/v2/auth?…", "expires_in": 300 }`
 
 `POST /v1/auth/identities/google/link:complete` — auth
-Request `{ "state": "…", "code": "…", "id_token": "…", "device_token": "dt_…" }`
+Request `{ "state": "…", "code": "…", "device_token": "dt_…", "device_proof": "…" }`, with `Idempotency-Key`. The server exchanges the code; no client ID token is accepted.
 → `200 { "identity": { "provider": "google", "email_masked": "h***@gmail.com", "linked_at": "…" }, "account": { "id": "018f…", "is_guest": false }, "unlocked": ["premium_purchase","restore_purchases","device_recovery"] }`
 Errors: `409 identity_in_use`, `422 google_email_unverified`, `401 token_expired` (state), `403 store_receipt_invalid`→n/a, `400 validation_failed`.
 

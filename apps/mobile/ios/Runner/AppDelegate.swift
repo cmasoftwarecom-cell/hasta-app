@@ -2,10 +2,16 @@ import Flutter
 import LocalAuthentication
 import Security
 import UIKit
+#if DEBUG
+import Network
+#endif
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
   private var recovery: FlutterMethodChannel?
+  #if DEBUG
+  private let gmailNetwork = GmailNetwork()
+  #endif
   private let transferQueue = DispatchQueue(label: "app.hasta.mobile.transfer_approval")
   private let transferTag = Data("app.hasta.mobile.transfer_approval.v1".utf8)
 
@@ -15,6 +21,10 @@ import UIKit
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
     if let controller = window?.rootViewController as? FlutterViewController {
+      #if DEBUG
+      FlutterEventChannel(name: "app.hasta.mobile/gmail_network", binaryMessenger: controller.binaryMessenger)
+        .setStreamHandler(gmailNetwork)
+      #endif
       FlutterMethodChannel(name: "app.hasta.mobile/transfer_approval", binaryMessenger: controller.binaryMessenger)
         .setMethodCallHandler { [weak self] call, result in
           guard let self = self else { return result(FlutterMethodNotImplemented) }
@@ -145,3 +155,31 @@ import UIKit
     return super.application(application, continue: userActivity, restorationHandler: restorationHandler)
   }
 }
+
+#if DEBUG
+private final class GmailNetwork: NSObject, FlutterStreamHandler {
+  private var monitor: NWPathMonitor?
+  private let queue = DispatchQueue(label: "app.hasta.mobile.gmail_network")
+
+  func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    _ = onCancel(withArguments: nil)
+    let monitor = NWPathMonitor()
+    self.monitor = monitor
+    monitor.pathUpdateHandler = { [weak self, weak monitor] path in
+      let online = path.status == .satisfied
+      DispatchQueue.main.async {
+        guard let monitor = monitor, self?.monitor === monitor else { return }
+        events(online)
+      }
+    }
+    monitor.start(queue: queue)
+    return nil
+  }
+
+  func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    monitor?.cancel()
+    monitor = nil
+    return nil
+  }
+}
+#endif

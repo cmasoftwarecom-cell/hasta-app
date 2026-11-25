@@ -106,6 +106,10 @@ test('S2 sessions and T37/T38/T39: device proof, state, code verification, no me
     assert.equal(linked.data.identity.email_masked, 'i***@example.invalid');
     assert.doesNotMatch(JSON.stringify(linked.data), new RegExp(subject));
     assert.doesNotMatch(JSON.stringify(linked.data), new RegExp(fakeEmail));
+    const status = (token) => call(prefix, { method: 'GET', token });
+    assert.equal((await status()).status, 401);
+    assert.deepEqual((await status(a.token)).data, { identity: linked.data.identity });
+    assert.deepEqual((await status(b.token)).data, { identity: null });
     assert.deepEqual(await complete(a, good, key), { ...linked, replay: 'true' });
     assert.equal((await complete(a, { ...good, code: uuid7() }, key)).data.error.code, 'idempotency_conflict');
     assert.equal((await complete(a, good)).data.error.code, 'token_expired');
