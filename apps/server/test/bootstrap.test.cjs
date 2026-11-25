@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const { createApp, Database } = require('../dist/main');
 const { randomBytes } = require('node:crypto');
-const { uuid7 } = require('../dist/modules/auth/credentials');
+const { sha, uuid7 } = require('../dist/modules/auth/credentials');
 const { ReplayExpiry } = require('../dist/modules/auth/replay-expiry');
 
 test('S0-SMOKE: Nest HTTP starts; migrated PostgreSQL serves Prisma queries', async () => {
@@ -64,17 +64,32 @@ test('T40/T41/T42/T46: guest lifecycle, device-scoped replays and family revocat
     assert.equal((await guest({ ...a, proof: b.proof }, key)).status, 401);
     assert.equal((await register(a.raw, a.proof, enrollmentKey)).replay, 'true');
     assert.equal((await guest(a, key)).data.refresh_token, first.data.refresh_token);
-    assert.notEqual((await guest(b, key)).data.account.id, first.data.account.id);
-    assert.equal((await guest(a)).data.account.id, first.data.account.id);
+    const otherDevice = await guest(b, key);
+    assert.notEqual(otherDevice.data.account.id, first.data.account.id);
+    const otherFamily = await guest(a);
+    assert.equal(otherFamily.data.account.id, first.data.account.id);
     assert.equal((await call('me', null, undefined, first.data.access_token)).data.account.id, first.data.account.id);
     const refresh = (device, refresh_token, idemKey) => call('auth/refresh', { device_token: device.device_token, device_proof: device.proof, refresh_token }, idemKey);
     const rotateKey = uuid7(), rotated = await refresh(a, first.data.refresh_token, rotateKey);
     assert.equal(rotated.status, 200); assert.equal((await refresh(a, first.data.refresh_token, rotateKey)).replay, 'true');
-    assert.equal((await refresh(b, first.data.refresh_token, rotateKey)).status, 401);
+    // A rotated token would trip the reuse guard even without the device check.
+    const activeSession = await db.sessions.findUniqueOrThrow({
+      where: { refresh_hash: sha(rotated.data.refresh_token) },
+    });
+    const family = { family_id: activeSession.family_id };
+    assert.equal(activeSession.revoked_at, null);
+    assert.equal(await db.sessions.count({ where: family }), 2);
+    assert.equal((await call('me', null, undefined, rotated.data.access_token)).status, 200);
+    const crossDevice = await refresh(b, rotated.data.refresh_token);
+    assert.equal(crossDevice.status, 401, 'T46: an active token is rejected on another binding');
+    assert.equal(await db.sessions.count({ where: { ...family, revoked_at: null } }), 0,
+      'T46: rejection commits revocation of the entire family');
     assert.equal((await refresh(a, rotated.data.refresh_token)).status, 401);
     assert.equal((await refresh(a, first.data.refresh_token, rotateKey)).status, 401);
     assert.equal((await guest(a, key)).status, 401);
     assert.equal((await call('me', null, undefined, rotated.data.access_token)).status, 401);
+    assert.equal((await call('me', null, undefined, otherFamily.data.access_token)).status, 200);
+    assert.equal((await call('me', null, undefined, otherDevice.data.access_token)).status, 200);
     const c = await enroll();
     await db.device_cooldowns.create({ data: { device_hash: c.device_hash, until: new Date(Date.now() + 60_000) } });
     const blocked = await guest(c);
