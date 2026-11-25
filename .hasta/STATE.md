@@ -65,6 +65,8 @@ S2 Gmail Link (PR #3): signed-in Linked Accounts uses code-only consent and a ma
 
 P1-GMAIL-SESSION-EXPIRY: Linked Accounts revalidates the proved account before starting consent and refreshes expired access through the existing device-bound flow. If completion expires, English/Myanmar copy prompts fresh consent; the old code is not retried under a rotated session. The T37/T40/T41/T42 loopback regression covers both expiry points.
 
+P1-T43-OFFLINE-TRANSITION: Linked Accounts listens to Android/iOS network availability while the unlinked form is visible. The CTA starts disabled until availability is known, disables on loss with localized copy, and re-enables on reconnect if status is ready. API errors still handle network or backend failure independently. English/Myanmar T43 widgets cover loss before a tap and recovery; native network-toggle QA remains open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -95,7 +97,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix P1-T43-OFFLINE-TRANSITION
+Hasta fix P1-GMAIL-CANCEL-SUBMIT
 ```
 
 ## Changelog (append one line per merged PR)

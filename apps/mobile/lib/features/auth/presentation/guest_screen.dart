@@ -294,15 +294,33 @@ class _GuestScreenState extends State<GuestScreen> {
                     Text(copy.gmailUnlinkGuard),
                   ] else ...[
                     Text(copy.guestRisk),
-                    FilledButton(
-                      onPressed: _busy ||
-                              !_gmailReady ||
-                              offline ||
-                              failure?.status == 404 ||
-                              failure?.code == 'configuration'
-                          ? null
-                          : () => _gmail(connect: true),
-                      child: Text(copy.connectGmail),
+                    StreamBuilder<bool>(
+                      stream: widget.gmail!.networkAvailable,
+                      builder: (context, network) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (!offline && network.data == false)
+                            Semantics(
+                                liveRegion: true, child: Text(copy.offline)),
+                          if (!offline && network.hasError)
+                            Semantics(
+                                liveRegion: true,
+                                child: Text(copy.genericError)),
+                          FilledButton(
+                            onPressed: _busy ||
+                                    !_gmailReady ||
+                                    offline ||
+                                    network.connectionState !=
+                                        ConnectionState.active ||
+                                    network.data != true ||
+                                    failure?.status == 404 ||
+                                    failure?.code == 'configuration'
+                                ? null
+                                : () => _gmail(connect: true),
+                            child: Text(copy.connectGmail),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                   if (_connectingGmail)

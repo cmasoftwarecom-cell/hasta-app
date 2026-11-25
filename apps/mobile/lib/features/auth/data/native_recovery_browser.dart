@@ -100,6 +100,7 @@ class NativeRecoveryBrowser {
 }
 
 abstract interface class GmailLinkActions {
+  Stream<bool> get networkAvailable;
   Future<String?> status(String accountId);
   Future<String> connect(String accountId);
   void cancel();
@@ -111,6 +112,13 @@ class GmailLinkFlow implements GmailLinkActions {
   final GuestRepository repository;
   final browser = NativeRecoveryBrowser();
   int _attempt = 0;
+
+  @override
+  late final Stream<bool> networkAvailable =
+      const EventChannel('app.hasta.mobile/gmail_network')
+          .receiveBroadcastStream()
+          .map((event) => event == true)
+          .distinct();
 
   @override
   Future<String?> status(String accountId) => repository.linkedGmail(accountId);

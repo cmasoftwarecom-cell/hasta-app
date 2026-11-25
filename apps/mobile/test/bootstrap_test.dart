@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -43,9 +45,13 @@ class _GuestSession implements GuestSession {
 }
 
 class _GmailActions implements GmailLinkActions {
+  final network = StreamController<bool>.broadcast();
   bool offline = true;
   bool expireFirstAttempt = true;
   String? connectedAccount;
+
+  @override
+  Stream<bool> get networkAvailable => network.stream;
 
   @override
   Future<String?> status(String accountId) async {
@@ -139,10 +145,11 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
-    testWidgets('T37/T43: Gmail linking in Settings, with restart ($language)',
+    testWidgets('T37/T43: Gmail reacts to offline transitions ($language)',
         (tester) async {
       final copy = await AppLocalizations.delegate.load(Locale(language));
       final gmail = _GmailActions();
+      addTearDown(gmail.network.close);
       Future<void> tap(Finder target) async {
         await tester.tap(target);
         await tester.pumpAndSettle();
@@ -160,6 +167,19 @@ void main() {
       expect(tester.widget<FilledButton>(connect).onPressed, isNull);
       gmail.offline = false;
       await tap(find.text(copy.retry));
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(connect).onPressed, isNotNull);
+      gmail.network.add(false);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      expect(find.text(copy.offline), findsOneWidget);
+      await tester.tap(connect, warnIfMissed: false);
+      expect(gmail.expireFirstAttempt, isTrue, reason: 'no OAuth call');
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      expect(find.text(copy.offline), findsNothing);
       await tap(connect);
       expect(find.text(copy.gmailRestart), findsOneWidget);
       await tap(connect);
@@ -167,6 +187,8 @@ void main() {
       expect(
           find.text(copy.gmailLinked('a***@example.invalid')), findsOneWidget);
       expect(find.text(copy.gmailUnlinkGuard), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(gmail.network.hasListener, isFalse);
     });
 
     testWidgets('T30/T40: Welcome explains unlinked account loss ($language)',

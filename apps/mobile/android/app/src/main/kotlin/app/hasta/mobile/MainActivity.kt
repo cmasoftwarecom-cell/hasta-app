@@ -13,6 +13,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity: FlutterActivity() {
     private var recovery: MethodChannel? = null
     private val qr by lazy { QrSurface(this) }
+    private var gmailNetwork: GmailNetwork? = null
     private val debugBuild get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     private val recoveryHost: String? by lazy {
         packageManager.getActivityInfo(componentName, PackageManager.GET_META_DATA)
@@ -23,6 +24,7 @@ class MainActivity: FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         TransferApproval(this).register(flutterEngine.dartExecutor.binaryMessenger)
         qr.register(flutterEngine.dartExecutor.binaryMessenger)
+        if (debugBuild) gmailNetwork = GmailNetwork(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.hasta.mobile/device")
             .setMethodCallHandler { call, result ->
                 if (call.method != "info") {
@@ -57,6 +59,8 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        gmailNetwork?.detach()
+        gmailNetwork = null
         qr.detach()
         recovery?.setMethodCallHandler(null)
         recovery = null
