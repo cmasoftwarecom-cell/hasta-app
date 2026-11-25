@@ -166,7 +166,9 @@ jobs:
             exit 1
           fi
       - name: T40/T41 native guest on a fresh iOS simulator
+        timeout-minutes: 12
         run: |
+          set -o pipefail
           device=$(xcrun simctl list devices available -j | node -e '
             const all = Object.values(JSON.parse(require("fs").readFileSync(0)).devices).flat();
             const phone = all.find(d => d.name.startsWith("iPhone") && d.isAvailable);
@@ -177,8 +179,19 @@ jobs:
           xcrun simctl erase "$device"
           xcrun simctl boot "$device"
           xcrun simctl bootstatus "$device" -b
-          flutter test --no-pub -d "$device" integration_test/guest_native_test.dart \
-            --dart-define=HASTA_API_BASE_URL=http://127.0.0.1:3000
+          flutter build ios --simulator --debug --config-only --no-pub \
+            --target=integration_test/guest_native_test.dart \
+            --dart-define=HASTA_API_BASE_URL=http://127.0.0.1:3000 \
+            --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=true
+          log="$RUNNER_TEMP/hasta-ios-xctest.log"
+          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
+            -configuration Debug -destination "platform=iOS Simulator,id=$device" \
+            -parallel-testing-enabled NO -only-testing:RunnerTests/RunnerTests/testGuestNative \
+            -resultBundlePath "$RUNNER_TEMP/hasta-ios-native.xcresult" test | tee "$log"
+          grep -Eq 'Test Case .*testGuestNative.* passed' "$log" || {
+            echo 'XCTest did not report a passing native guest test.' >&2
+            exit 1
+          }
           test "$(psql "$HASTA_DATABASE_URL" -Atc \
             "SELECT count(*) FROM accounts WHERE is_guest")" = 1
           test "$(psql "$HASTA_DATABASE_URL" -Atc \

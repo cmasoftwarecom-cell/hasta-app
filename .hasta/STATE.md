@@ -35,6 +35,8 @@ The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression fo
 
 P0-T40-T41-IOS-AUTH-503: the [failing simulator job](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45593586792/job/139133766537) logged a broken pipe while loading policy values, then `/health` passed but the first Guest tap returned 503. The isolated test launcher now validates allowed policy values before listening and generates ephemeral credentials in the server process. A committed test rejects an empty policy input and exercises iOS-shaped enrollment, creation, and same-device resume over loopback HTTP. Native T40/T41 still require a green simulator run with the existing database assertions.
 
+P0-T40-T41-IOS-NATIVE-FAIL: the [failed run](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45596133520/job/139142558785) built successfully, then timed out loading the Dart suite. CI now runs the same Dart target through hosted XCTest and requires one explicit passing scenario from Flutter's native results bridge. The bridge wait is bounded, and the isolated PostgreSQL assertions still run after the simulator test. A green macOS simulator run is still required.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |

@@ -120,7 +120,8 @@ void main() {
     await waitFor(tester, find.text('Guest profile'),
         failure: () => reopened.failure);
     await tester.pumpAndSettle();
-    expect((await reopened.restore())?.accountId, account);
+    expect((await reopened.restore())?.accountId == account, isTrue,
+        reason: 'Restore must reuse the original guest account');
 
     await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
@@ -132,6 +133,7 @@ void main() {
     await waitFor(tester, find.text('Guest profile'),
         failure: () => reopened.failure);
     await tester.pumpAndSettle();
-    expect((await reopened.cached())?.accountId, account);
+    expect((await reopened.cached())?.accountId == account, isTrue,
+        reason: 'Guest re-entry must reuse the original account');
   });
 }
