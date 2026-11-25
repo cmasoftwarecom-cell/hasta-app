@@ -119,22 +119,11 @@ not exist while **S1 is still open**. Fix either:
   instead of hanging 12 min.
 
 ## GitHub Actions deploy-staging.yml (so deployments are recorded, not just Pages)
-```yaml
-name: deploy-staging
-on:
-  push:
-    branches: [ main ]
-jobs:
-  deploy:
-    environment: staging        # creates a real staging deployment record
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: ssh hasta@149.28.136.202 'cd ~/hasta && git pull && npm ci && npm run build && pm2 restart hasta-api --update-env'
-        # GIT_COMMIT baked from ${{ github.sha }} into .env during deploy
-```
-After this workflow runs once, GitHub deployment records will list a `staging`
-deployment (not only GitHub Pages), and the deployed SHA is registered.
+
+- Dispatch `.github/workflows/deploy-staging.yml` from `main` only. Configure the `staging` environment with required reviewers and restrict its deployment branches to `main`. Select a full SHA already merged into `main` that includes the staging health contract (PR #5). The workflow fails before SSH if the built image does not report that baked SHA.
+- Keep the existing `STAGING_SSH_HOST`, `STAGING_SSH_USER`, and `STAGING_SSH_KEY` environment secrets. Set the `staging` environment variable `STAGING_SSH_KNOWN_HOSTS` to the trusted OpenSSH `known_hosts` entry verified out of band; do not pin a key learned from the deploy connection itself.
+- The authorized staging SSH user needs Docker access, write access under `/srv/hasta`, and read access to `/etc/hasta/api.env`. Use isolated staging services and `HASTA_ENV=staging`. Archives remain under `/srv/hasta/releases/<sha>/`; the candidate binds only to loopback.
+- The previous container is kept until public verification passes. Startup or verifier failure restores it without advancing `CURRENT`; a verified release advances `CURRENT` before the stopped backup is removed. If SSH loss prevents rollback or leaves `/srv/hasta/.deployment` unresolved, reconcile the containers and verify the intended revision before clearing the transaction or retrying.
 
 ## Ready-when checklist (all green -> run QA)
 - [ ] `dig +short api.nexusmmr.com` returns 149.28.136.202 (no NXDOMAIN)

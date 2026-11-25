@@ -7,7 +7,7 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.2` (canonical DTCG)
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` on `fix/flutter-ci-sdk`
+- updated: `2026-11-25` by `agent` on `fix/staging-deploy-workflow`
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
@@ -21,6 +21,10 @@
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints and diffs the OpenAPI contract against a release tag from the base history or the pinned S1 bootstrap under ADR-0010.
 
 ## Open test IDs
+P1-STAGING-DEPLOY-WORKFLOW (verification guide §1): the manual workflow builds from `apps/server` on a revision already in `main`, verifies its baked SHA, transfers and loads the archive over host-key-pinned SSH, and calls the tracked HTTPS verifier. Deploy only after the [staging health contract in PR #5](https://github.com/cmasoftwarecom-cell/hasta-app/pull/5) lands. The isolated regression uses synthetic archives; no deployment or live staging QA was run.
+
+P1-STAGING-ROLLBACK: cutover retains the previous container, restores it if candidate startup or public verification fails, and advances `CURRENT` only after the verifier passes. P1-STAGING-HEALTH-STATUS: the verifier requires exact HTTP 200 and matching staging JSON from the same response. Loopback covers 200, 202, 302 and 503; the cutover fixture confirms a 302 rolls back. Live staging remains unverified.
+
 T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. S1 had no Google runtime integration. S2 wires the server verifier into the existing fail-closed gate and uses locally signed tokens; HTTP tests map T37/T38/T39 for authenticated linking, no merge, and server proof verification. The sessions tests cover account scope, family revocation, current-session replay, and other-device revocation. These do not qualify the S2 mobile or recovery gates.
 
 P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility tap/hold actions in English and Myanmar during restore, on welcome, after an offline guest attempt, and after sign-out. Only Guest (when enabled) and Privacy are allowed; the separate build-gated QA hold remains covered by T36. Local temporary Google outlined and Apple icon actions on welcome both caused failures. A temporary Connect Gmail action in signed-in Settings passed; no linking UI or integration ships in S1.
