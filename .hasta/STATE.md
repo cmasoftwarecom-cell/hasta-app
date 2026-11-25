@@ -71,6 +71,8 @@ P1-GMAIL-CANCEL-SUBMIT: Cancel ends only the pre-submit consent attempt. Linked 
 
 P2-GMAIL-FLOW-COVERAGE: T37 drives the real Gmail link coordinator and repository through the mocked native consent channel and an isolated loopback HTTP fixture. It checks cancellation before submission, stale and duplicate callbacks, submit notification before one authenticated completion, and unchanged local credentials. Native OAuth and app-association QA remain open.
 
+P2-GMAIL-PENDING-KEY-CLEANUP: Gmail link completion sends its UUIDv7 idempotency key without a durable retry slot; uncertain outcomes use an authenticated masked status read without replaying the code. T37 loopback coverage verifies no stored key during or after an ambiguous 503 and preserves other auth retry behavior. See ADR-0012.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |

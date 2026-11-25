@@ -309,6 +309,7 @@ void main() {
     final requests = <(String, String?, String?, Document)>[];
     var dropRegister = true;
     var rejectAccess = true;
+    Map<String, String>? credentialsAtAmbiguousCompletion;
     var refreshes = 0, starts = 0;
     final redirect = Uri.https('callback.example.invalid', '/recover');
     final account = {
@@ -360,6 +361,19 @@ void main() {
             'response_type': 'code',
             'code_challenge_method': 'S256',
           }).toString(),
+        }));
+      } else if (path.endsWith('/link:complete') && !rejectAccess) {
+        credentialsAtAmbiguousCompletion = Map.of(secure.values);
+        response.statusCode = 503;
+        response.write(jsonEncode({
+          'error': {'code': 'unavailable'}
+        }));
+      } else if (path == '/v1/auth/identities/google') {
+        response.write(jsonEncode({
+          'identity': {
+            'provider': 'google',
+            'email_masked': 'a***@example.test'
+          }
         }));
       } else if (path.endsWith('/link:start') ||
           path.endsWith('/link:complete')) {
@@ -430,6 +444,23 @@ void main() {
     final restarted =
         await second.beginGmailRecovery(redirect, linkAccountId: 'guest');
     expect(restarted.state, isNot(consent.state));
+    expect(requests.last.$3, 'Bearer next-2');
+    final beforeCompletion = Map.of(secure.values);
+    final restartedCallback = redirect.replace(
+        queryParameters: {'state': restarted.state, 'code': 'new-code'});
+    await expectLater(
+        second.finishGmailLink('guest', restarted, restartedCallback),
+        throwsA(
+            isA<AuthFailure>().having((error) => error.status, 'status', 503)));
+    expect(secure.values, beforeCompletion,
+        reason: 'an ambiguous completion must not leave a pending key');
+    expect(credentialsAtAmbiguousCompletion, beforeCompletion,
+        reason: 'a non-replayed completion needs no key in secure storage');
+    final beforeStatusRead = requests.length;
+    expect(await second.linkedGmail('guest'), 'a***@example.test');
+    expect(requests.skip(beforeStatusRead).map((request) => request.$1),
+        ['/v1/me', '/v1/auth/identities/google']);
+    expect(requests.last.$2, isNull);
     expect(requests.last.$3, 'Bearer next-2');
     expect((await second.cached())?.accountId, 'guest');
     await second.signOut();

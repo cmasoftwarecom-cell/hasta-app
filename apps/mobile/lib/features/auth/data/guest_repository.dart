@@ -326,19 +326,23 @@ class GuestRepository implements GuestSession {
       String accountId, GmailRecoveryConsent consent, Uri callback) async {
     final code = consent.acceptCallback(callback);
     final source = await _transferSource(accountId);
-    return _write<String>('auth/identities/google/link:complete', {
-      'device_token': source['device'],
-      'device_proof': await _proof(),
-      'state': consent.state,
-      'code': code,
-    }, (reply) async {
+    // Reconcile uncertain outcomes by reading status, not by replaying this
+    // one-time code. Keep the wire idempotency key but do not persist it.
+    return _request('auth/identities/google/link:complete',
+        key: _uuid7(),
+        access: source['access'] as String,
+        body: {
+          'device_token': source['device'],
+          'device_proof': await _proof(),
+          'state': consent.state,
+          'code': code,
+        }).then((reply) {
       if (reply['account'] case {'id': final String id, 'is_guest': false}
           when id == accountId) {
         return _maskedGmail(reply['identity']);
       }
       throw const AuthFailure('link_reply_invalid');
-    }, access: source['access'] as String)
-        .onError<AuthFailure>((error, stack) {
+    }).onError<AuthFailure>((error, stack) {
       // Refresh rotates the session ID. This consent cannot follow it.
       if (error.status == 401) throw const AuthFailure('gmail_link_restart');
       Error.throwWithStackTrace(error, stack);
