@@ -1,7 +1,9 @@
 import 'reflect-metadata';
-import { ArgumentsHost, Catch, Controller, Get, Header, HttpException, Injectable, Module, OnApplicationShutdown } from '@nestjs/common';
+import { ArgumentsHost, Catch, Controller, Get, Header, HttpException, Injectable, Module, OnApplicationShutdown, ServiceUnavailableException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaClient } from '@prisma/client';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { AuthController } from './modules/auth/controller';
 import { GuestAuth } from './modules/auth/service';
 import { ReplayExpiry } from './modules/auth/replay-expiry';
@@ -20,12 +22,29 @@ export class Database extends PrismaClient implements OnApplicationShutdown {
   }
 }
 
+// Read from the build artifact, not from an overridable runtime SHA.
+function readBuildCommit() {
+  try {
+    return readFileSync(join(__dirname, 'build-commit'), 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw error;
+  }
+}
+const buildCommit = readBuildCommit();
+
 // Internal orchestration probe, not part of the /v1 client API.
 @Controller()
 class HealthController {
   @Get('health')
   @Header('Cache-Control', 'no-store')
   health() {
+    if (process.env.HASTA_ENV === 'staging') {
+      if (buildCommit.length !== 40 || !/^[a-f0-9]+$/.test(buildCommit)) {
+        throw new ServiceUnavailableException();
+      }
+      return { status: 'ok', env: 'staging', commit: buildCommit };
+    }
     return { status: 'ok' };
   }
 }

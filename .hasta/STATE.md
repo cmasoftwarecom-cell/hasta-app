@@ -7,20 +7,22 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.2` (canonical DTCG)
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` on `fix/flutter-ci-sdk`
+- updated: `2026-11-25` by `agent` on `fix/staging-health-contract`
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
 - blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
-- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run); [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2) (S1 plus partial S2; `16282e5`)
-- open PRs: [#3](https://github.com/cmasoftwarecom-cell/hasta-app/pull/3) (Gmail Link); [#4](https://github.com/cmasoftwarecom-cell/hasta-app/pull/4) (Security & Devices)
+- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run); [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2) (S1 plus partial S2; `16282e5`); [#6](https://github.com/cmasoftwarecom-cell/hasta-app/pull/6) (Flutter CI SDK compatibility; `e85549c`)
+- open PRs: [#3](https://github.com/cmasoftwarecom-cell/hasta-app/pull/3) (Gmail Link); [#4](https://github.com/cmasoftwarecom-cell/hasta-app/pull/4) (Security & Devices); [#5](https://github.com/cmasoftwarecom-cell/hasta-app/pull/5) (staging health contract; draft rebased onto `main` at `e85549c`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints and diffs the OpenAPI contract against a release tag from the base history or the pinned S1 bootstrap under ADR-0010.
 
 ## Open test IDs
+Staging health contract (verification guide §1): the `/health` staging response now requires a full commit SHA baked into the server image; incomplete or invalid metadata returns 503, and non-staging stays unchanged. The localhost contract tests are not public staging evidence. The public tunnel and deployed revision remain unverified; no staging fixtures were written.
+
 T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. S1 had no Google runtime integration. S2 wires the server verifier into the existing fail-closed gate and uses locally signed tokens; HTTP tests map T37/T38/T39 for authenticated linking, no merge, and server proof verification. The sessions tests cover account scope, family revocation, current-session replay, and other-device revocation. These do not qualify the S2 mobile or recovery gates.
 
 P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility tap/hold actions in English and Myanmar during restore, on welcome, after an offline guest attempt, and after sign-out. Only Guest (when enabled) and Privacy are allowed; the separate build-gated QA hold remains covered by T36. Local temporary Google outlined and Apple icon actions on welcome both caused failures. A temporary Connect Gmail action in signed-in Settings passed; no linking UI or integration ships in S1.
@@ -101,3 +103,4 @@ Hasta test T28 on two dedicated local Android phones
 - Imported, unverified: `PR #2` (planned) — T37 rewrite + T46/T47/T48 + device-bound refresh + brand tokens
 - `2026-11-24` — reconciled imported state against `main`; actual S0 scaffold submitted for review.
 - `PR #1` — S0 scaffold merged; S1 backend work starts on a new branch.
+- `PR #6` — Flutter CI compatibility restored on `main`; the rebase does not run a staging deployment.
