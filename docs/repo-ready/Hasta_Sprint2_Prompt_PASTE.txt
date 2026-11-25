@@ -1,0 +1,69 @@
+Hasta — agent instruction (SPEC 1.0.1). Paste this text as the message. Reference the two spec files by repo path, do not paste them.
+
+=== CONTEXT ===
+SPEC has been patched to 1.0.1 after your Sprint 1 report. The authoritative files are now:
+  - docs/Hasta_v1_Master_PRD.md            (SPEC 1.0.1 — read §22 Change log first, then §16 T37/T46/T47/T48, §14.1 brand fill tokens, §5.3 device-bound refresh)
+  - design/hasta-ds-1.0.1.json             (DS 1.0.1 — adds bg.brand / bg.brandPressed / bg.brandDisabled and measured contrast values)
+Re-read both from the repo. Do not rely on your stored copy of 1.0.0.
+
+=== VERDICT ON PR #1 ===
+ACCEPT. Merge into main once checks stay green. The PR <= 400 lines rule is waived for this bootstrap PR only (Sprint 0 + Sprint 1). It is enforced again from PR #2.
+
+Do NOT start Sprint 2 on the Sprint 1 branch. Sequence is:
+  1. merge PR #1
+  2. PR #2 = conformance patch only, off main, <= 400 lines, no feature code
+  3. after PR #2 merges, branch feature/HAS-200-gmail-link-transfer off main and start Sprint 2
+
+=== PR #2 SCOPE ===
+0. Commit the two SPEC 1.0.1 files above into the repo, rename design/hasta-ds-1.0.0.json to hasta-ds-1.0.1.json, and update every reference to it (generate-tokens.mjs input path, CI token-compliance check, README).
+1. Rewrite the T37 gate to SPEC 1.0.1 exactly: fail on Google SIGN-IN ROUTES and on verification that skips iss/aud/exp/nonce/email_verified; explicitly ALLOW the Google auth library inside modules/identity. Add a positive fixture test proving the library is permitted so this cannot regress into a dependency ban. TDD: write that fixture first, watch it FAIL against the current gate, then narrow the gate and watch it PASS. Report both states.
+2. Add gates T46 / T47 / T48:
+   - T46 refresh token presented from a different device binding -> 401 + family revoked
+   - T47 spectral lint + breaking-change diff vs previous tag on docs/api/openapi.json (JSON is accepted, no YAML)
+   - T48 docker-compose database image must be postgres:16 — change the compose file and pin it
+3. Implement device-bound refresh tokens: store (account_id, device_hash) on the refresh row, reject cross-binding presentation, revoke the family on reuse. TTLs stay remote-config values.
+4. Switch the primary button fill from text.link to bg.brand / bg.brandPressed / bg.brandDisabled. Regenerate lib/core/design/tokens.dart from the DS JSON — never hand-edit. Close ADR-0005 by recording ADR-0006.
+5. Keep display/h1 at the 1.65 Myanmar floor (accepted). Verify at 200% text scale that the welcome hero and match-reveal do not clip; use min-height, never fixed height.
+
+=== DEVIATION RULINGS ===
+Accepted as-is: Prisma (the spec already named it as the recommended choice, so this is not a deviation) / profiles.field_hlc / sessions.revoked_reason / sessions.last_seen_at / native device-id channel and path_provider for Drift.
+Accepted with condition: idempotency keyed by scope for PRE-AUTH token endpoints — authenticated writes must still key on (account_id, key), device-scoped keys must never be replayable across devices, and one test must prove each direction.
+Accepted as [PROPOSAL], must be remote-config tunable not hard-coded: device token 365 d, refresh 30 d, guest-create 3 per device per hour, device-register 10 per hour. In your next report list which of these already read from remote config, with the key names.
+Deadline moved earlier: background outbox drain (WorkManager / BGTaskScheduler) is due BY SPRINT 3, not later. Until it exists, do not describe the build as offline-first in any README, doc, or store note.
+Also scheduled: pepper re-hash job before any real user is onboarded (Sprint 9); Zawgyi detect stays Sprint 3 but the detect stub ships now so legacy input is never stored as Zawgyi; PostGIS deferred to Sprint 8, and no radar copy may promise distance precision.
+Not accepted: local Postgres 18 vs CI 16 (fixed by T48) / any "production ready" claim while store, legal and security review are absent.
+
+=== CLARIFY IN YOUR NEXT REPORT ===
+1. Your suite-total line was truncated ("server passes 70/70 tests ... , T44."). State plainly whether T44 passes or is open — SPEC puts T44 in Sprint 2.
+2. T43 is marked passing while Gmail linking does not exist. Confirm it is a UI-state assertion (row disabled while offline) and the real flow is still open.
+3. Confirm Conventional Commits with scope on all 5 commits, and list any commit that bundles two scopes.
+4. State whether the release-APK T36 check runs on every PR to main or only on tags. SPEC requires every PR.
+5. The paused Supabase project whose name contains the banned legacy word: leave it paused and rename it hasta-legacy-archive (or delete it) so no future export reintroduces the string. T45 scans code, not cloud resource names — record that decision in a one-line ADR note.
+
+=== SPRINT 2 (only after PR #2 merges, on feature/HAS-200-gmail-link-transfer) ===
+Implement SPEC 1.0.1 sections 5.4 and 5.5 end to end:
+  - POST /v1/auth/identities/google/link:start and :link:complete — single-use state + nonce (5 min TTL),
+    server-side ID-token verification (iss, aud, exp, nonce, signature), email_verified required,
+    409 identity_in_use when the Google sub is already bound, no account merge,
+    DELETE unlink with recovery guard (409 recovery_required if it is the only recovery method).
+  - Lost-device recovery: /v1/auth/recover:start and :complete -> new binding, other sessions revoked.
+  - QR transfer: start / redeem / confirm / reject + GET status. Single transaction on confirm (token
+    used_at, old binding deleted, new binding created, old sessions revoked). Token TTL 120 s, hash-only
+    storage, single use, rate limit <= 2 per 3 min, FLAG_SECURE + iOS secure screen, reject when the
+    target device holds a guest account (409 guest_exists_on_target).
+  - Flutter: Settings > Account > Linked accounts sheet with all five states (loading / empty / error /
+    offline-disabled / linked-masked), the benefit copy from the DS keyStrings, Change-device QR screen
+    plus scanner, Security > active sessions plus "sign out from all other devices".
+  - my + en i18n keys for every new string, no hard-coded strings. Myanmar text may carry a
+    PENDING-COPY marker until the copywriter returns, but the English value and a Myanmar fallback must exist.
+  - Tests: T25-T30, T38, T39, T44, and re-run the rewritten T37 and T43. Write each test before its code
+    and show it failing first.
+  - Split Sprint 2 into three PRs, each <= 400 lines: PR #3 link, PR #4 recovery, PR #5 QR transfer.
+
+=== REPORT FORMAT (unchanged, every delivery) ===
+1. Repo tree of what changed.
+2. Test-matrix IDs now passing vs still open.
+3. [DEVIATION] list with reasons.
+4. The exact next-sprint prompt.
+Every test you claim must have been observed failing before the code made it pass. A gate that has never
+failed proves nothing.

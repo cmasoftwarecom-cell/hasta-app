@@ -1,0 +1,65 @@
+name: deploy-staging
+# Fixes "GitHub deployment records list only GitHub Pages": this job registers a
+# `staging` environment deployment and records the deployed commit SHA.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or SHA to deploy (must be a merged, reviewed revision)
+        required: true
+        default: main
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: staging                 # create in repo Settings > Environments, with required reviewers
+      url: https://api-staging.hasta.app
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ inputs.ref }}' }
+
+      - name: Resolve revision
+        id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build image with baked GIT_COMMIT
+        run: |
+          docker build \
+            --build-arg GIT_COMMIT=${{ steps.sha.outputs.sha }} \
+            --build-arg BUILD_TIME=$(date -u +%FT%TZ) \
+            -t hasta-api:${{ steps.sha.outputs.sha }} .
+          docker save hasta-api:${{ steps.sha.outputs.sha }} | gzip > api.tar.gz
+
+      - name: Ship + switch over (atomic symlink, keeps rollback target)
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_SSH_HOST }}
+          username: ${{ secrets.STAGING_SSH_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            mkdir -p /srv/hasta/releases/${{ steps.sha.outputs.sha }}
+            cat > /tmp/api.tar.gz < /dev/null   # uploaded by the next step (scp action)
+            cd /srv/hasta/releases/${{ steps.sha.outputs.sha }}
+            gunzip -c /tmp/api.tar.gz | docker load
+            docker stop hasta-api || true
+            docker rm hasta-api || true
+            docker run -d --name hasta-api --restart always \
+              --env-file /etc/hasta/api.env \
+              -p 127.0.0.1:3000:3000 \
+              hasta-api:${{ steps.sha.outputs.sha }}
+            echo ${{ steps.sha.outputs.sha }} > /srv/hasta/CURRENT
+
+      - name: Health contract (200 + SHA + env echo)
+        run: |
+          bash scripts/verify-staging.sh https://api-staging.hasta.app ${{ steps.sha.outputs.sha }}

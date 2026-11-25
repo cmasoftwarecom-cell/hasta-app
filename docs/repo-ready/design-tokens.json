@@ -1,0 +1,308 @@
+{
+  "$schema": "https://designtokens.org/schema/dtcg.json",
+  "$meta": {
+    "name": "Hasta Design System",
+    "version": "1.0.2",
+    "source_of_truth": "assets/design-tokens.json",
+    "generated_target": "apps/mobile/lib/design_tokens.g.dart",
+    "generator": "tools/scripts/design-tokens.mjs",
+    "rule": "Do not hand-edit the generated Dart. Change this file and re-run the generator.",
+    "notes": "Colors are brand placeholders pending final brand hex confirmation (ADR-0013)."
+  },
+  "color": {
+    "bg": {
+      "brand": {
+        "$type": "color",
+        "$value": "#6C4DF6"
+      },
+      "brandPressed": {
+        "$type": "color",
+        "$value": "#5A3BD8"
+      },
+      "brandDisabled": {
+        "$type": "color",
+        "$value": "#3F3663"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#14121C"
+      },
+      "surfaceRaised": {
+        "$type": "color",
+        "$value": "#1D1A28"
+      },
+      "canvas": {
+        "$type": "color",
+        "$value": "#0D0B13"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#B3261E"
+      },
+      "warn": {
+        "$type": "color",
+        "$value": "#8A5A00"
+      },
+      "ok": {
+        "$type": "color",
+        "$value": "#1E7A45"
+      }
+    },
+    "text": {
+      "onBrand": {
+        "$type": "color",
+        "$value": "#FFFFFF"
+      },
+      "primary": {
+        "$type": "color",
+        "$value": "#F3F1FA"
+      },
+      "secondary": {
+        "$type": "color",
+        "$value": "#B6B1C6"
+      },
+      "disabled": {
+        "$type": "color",
+        "$value": "#6E6880"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#FFB4AB"
+      },
+      "link": {
+        "$type": "color",
+        "$value": "#C9BCFF"
+      }
+    },
+    "line": {
+      "default": {
+        "$type": "color",
+        "$value": "#2A2637"
+      },
+      "strong": {
+        "$type": "color",
+        "$value": "#4A4360"
+      },
+      "focus": {
+        "$type": "color",
+        "$value": "{color.bg.brand}"
+      }
+    },
+    "icon": {
+      "default": {
+        "$type": "color",
+        "$value": "{color.text.secondary}"
+      },
+      "onBrand": {
+        "$type": "color",
+        "$value": "{color.text.onBrand}"
+      }
+    }
+  },
+  "typography": {
+    "fontFamily": {
+      "base": {
+        "$type": "family",
+        "$value": [
+          "Inter",
+          "Pyidaungsu",
+          "Noto Sans Myanmar",
+          "Myanmar Text",
+          "sans-serif"
+        ]
+      },
+      "numeric": {
+        "$type": "family",
+        "$value": [
+          "Inter",
+          "Roboto Mono",
+          "monospace"
+        ]
+      }
+    },
+    "fontSize": {
+      "body": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "label": {
+        "$type": "dimension",
+        "$value": "14px"
+      },
+      "title": {
+        "$type": "dimension",
+        "$value": "20px"
+      },
+      "display": {
+        "$type": "dimension",
+        "$value": "28px"
+      }
+    },
+    "lineHeight": {
+      "body": {
+        "$type": "number",
+        "$value": 1.65
+      },
+      "label": {
+        "$type": "number",
+        "$value": 1.5
+      },
+      "title": {
+        "$type": "number",
+        "$value": 1.35
+      },
+      "display": {
+        "$type": "number",
+        "$value": 1.2
+      }
+    },
+    "fontWeight": {
+      "regular": {
+        "$type": "number",
+        "$value": 400
+      },
+      "medium": {
+        "$type": "number",
+        "$value": 500
+      },
+      "semibold": {
+        "$type": "number",
+        "$value": 600
+      }
+    }
+  },
+  "space": {
+    "xs": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "sm": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "xl": {
+      "$type": "dimension",
+      "$value": "32px"
+    }
+  },
+  "radius": {
+    "sm": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "pill": {
+      "$type": "dimension",
+      "$value": "999px"
+    }
+  },
+  "elevation": {
+    "raised": {
+      "$type": "shadow",
+      "$value": [
+        {
+          "offsetX": "0px",
+          "offsetY": "2px",
+          "blur": "8px",
+          "color": "#00000066"
+        }
+      ]
+    }
+  },
+  "motion": {
+    "durationFast": {
+      "$type": "duration",
+      "$value": "120ms"
+    },
+    "durationBase": {
+      "$type": "duration",
+      "$value": "200ms"
+    },
+    "easingStandard": {
+      "$type": "cubicBezier",
+      "$value": [
+        0.2,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  },
+  "breakpoint": {
+    "narrow": {
+      "$type": "dimension",
+      "$value": "320px"
+    },
+    "textScaleMax": {
+      "$type": "number",
+      "$value": 2.0
+    }
+  },
+  "component": {
+    "button": {
+      "primary": {
+        "background": {
+          "$type": "color",
+          "$value": "{color.bg.brand}"
+        },
+        "backgroundPressed": {
+          "$type": "color",
+          "$value": "{color.bg.brandPressed}"
+        },
+        "backgroundDisabled": {
+          "$type": "color",
+          "$value": "{color.bg.brandDisabled}"
+        },
+        "foreground": {
+          "$type": "color",
+          "$value": "{color.text.onBrand}"
+        },
+        "minHeight": {
+          "$type": "dimension",
+          "$value": "48px"
+        },
+        "radius": {
+          "$type": "dimension",
+          "$value": "{radius.md}"
+        }
+      },
+      "secondary": {
+        "background": {
+          "$type": "color",
+          "$value": "#00000000"
+        },
+        "border": {
+          "$type": "color",
+          "$value": "{color.line.strong}"
+        }
+      }
+    },
+    "link": {
+      "color": {
+        "$type": "color",
+        "$value": "{color.text.link}"
+      }
+    },
+    "banner": {
+      "errorBg": {
+        "$type": "color",
+        "$value": "{color.bg.danger}"
+      }
+    }
+  }
+}
