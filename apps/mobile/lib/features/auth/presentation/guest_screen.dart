@@ -8,6 +8,7 @@ import '../../../design_tokens.g.dart';
 import '../data/guest_repository.dart';
 import '../data/native_qr_surface.dart';
 import '../domain/guest_session.dart';
+import 'device_sessions_screen.dart';
 import 'device_transfer_screen.dart';
 
 const _environment = String.fromEnvironment('HASTA_ENV');
@@ -258,6 +259,20 @@ class _GuestScreenState extends State<GuestScreen> {
                   Text(copy.account, style: style.titleLarge),
                   Text(copy.guestRisk),
                   SizedBox(height: space[5]),
+                  if (widget.session case final DeviceSessions sessions)
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => Navigator.of(context).push<void>(
+                                MaterialPageRoute(
+                                  builder: (_) => DeviceSessionsScreen(
+                                    load: () => sessions
+                                        .listDeviceSessions(profile.accountId),
+                                  ),
+                                ),
+                              ),
+                      child: Text(copy.securityDevices),
+                    ),
                   if (_transferReady)
                     OutlinedButton(
                       onPressed: _busy || offline

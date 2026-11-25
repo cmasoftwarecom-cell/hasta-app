@@ -68,7 +68,7 @@ Future<Document> _loadNativeDeviceInfo() async =>
     await _identityChannel.invokeMapMethod<String, dynamic>('info') ??
     (throw const AuthFailure('device_unavailable'));
 
-class GuestRepository implements GuestSession {
+class GuestRepository implements GuestSession, DeviceSessions {
   GuestRepository({
     String baseUrl = _backend,
     CredentialStore credentials = const SecureCredentials(),
@@ -118,6 +118,12 @@ class GuestRepository implements GuestSession {
 
   Future<Document> _request(String path,
       {Document? body, String? key, String? access}) async {
+    final data = await _requestData(path, body: body, key: key, access: access);
+    return data is Document ? data : {};
+  }
+
+  Future<Object?> _requestData(String path,
+      {Document? body, String? key, String? access}) async {
     try {
       final response = await _dio.requestUri<dynamic>(
         _endpoint(path),
@@ -134,9 +140,7 @@ class GuestRepository implements GuestSession {
         throw AuthFailure(error is Map ? '${error['code']}' : 'generic',
             status: status);
       }
-      return response.data is Map<String, dynamic>
-          ? response.data as Document
-          : {};
+      return response.data;
     } on DioException catch (error) {
       const connection = {
         DioExceptionType.connectionError,
@@ -326,6 +330,42 @@ class GuestRepository implements GuestSession {
       throw const AuthFailure('unauthenticated', status: 401);
     }
     return current;
+  }
+
+  @override
+  Future<List<DeviceSession>> listDeviceSessions(String accountId) async {
+    if ((await _session())?['account_id'] != accountId ||
+        (await restore())?.accountId != accountId) {
+      throw const AuthFailure('unauthenticated', status: 401);
+    }
+    final session = await _session();
+    if (session == null || session['account_id'] != accountId) {
+      throw const AuthFailure('unauthenticated', status: 401);
+    }
+    final data = await _requestData('auth/sessions',
+        access: session['access'] as String);
+    if (data is! List<Object?>) {
+      throw const AuthFailure('sessions_reply_invalid');
+    }
+    final sessions = <DeviceSession>[];
+    for (final row in data) {
+      if (row
+          case {
+            'platform': final String platform,
+            'created_at': final String created,
+            'last_seen_at': final String? lastSeen,
+            'current': final bool current,
+          }) {
+        final date = DateTime.tryParse(lastSeen ?? created);
+        if (date != null) {
+          sessions
+              .add((platform: platform, lastActive: date, current: current));
+          continue;
+        }
+      }
+      throw const AuthFailure('sessions_reply_invalid');
+    }
+    return sessions;
   }
 
   Future<TransferOffer> startDeviceTransfer(

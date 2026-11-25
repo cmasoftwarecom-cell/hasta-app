@@ -7,11 +7,11 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.2` (canonical DTCG)
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` for `P0-DESIGN-TOKENS-GATE`
+- updated: `2026-11-25` by `agent` on `feature/HAS-2b-device-sessions` (rebased onto the token-gate fix)
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
-- blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
+- blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, unmerged mobile Linked Accounts, Security & Devices revocation controls, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run); [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2) (S1 plus partial S2; `16282e5`)
 - open PRs: [#3](https://github.com/cmasoftwarecom-cell/hasta-app/pull/3) (Gmail Link); [#4](https://github.com/cmasoftwarecom-cell/hasta-app/pull/4) (Security & Devices)
@@ -61,6 +61,8 @@ P1-QR-START-RETRY: The mobile repository now scopes the pending QR-start key to 
 
 P2-WELCOME-RECOVERY-COPY: Welcome now renders the guest account-loss warning as plain text. English states that an account cannot be recovered if the device is lost without Gmail linked; Myanmar uses the normative SPEC §14.7 copy. T30/T40 widget regressions cover both locales at 320×568 and 200% text scale; T37 still permits only Guest and Privacy actions on Welcome. This does not expose recovery or qualify native T30.
 
+S2 Security & Devices: Signed-in Settings lists active sessions from the existing authenticated `GET /v1/auth/sessions`. It displays platform, current-session status and local activity date without rendering or caching identifiers. English/Myanmar T37/T40 widgets cover loading, empty, data, offline and error/retry at 320×568 and 200% text scale. The loopback check exercises account scoping, refresh and nullable activity dates. Individual and bulk revocation UI remain open; no API changes. The screen imports the canonical generated Dart from `main`.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -91,7 +93,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta test T28 on two dedicated local Android phones
+Hasta review feature/HAS-2b-device-sessions
 ```
 
 ## Changelog (append one line per merged PR)
