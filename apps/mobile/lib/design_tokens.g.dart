@@ -1,7 +1,17 @@
 // GENERATED from assets/design-tokens.json. Do not edit.
+// Legacy theme variants, spacing and text roles are compatibility data.
 import 'package:flutter/painting.dart';
 
 abstract final class HastaTokens {
+  static const bgBrand = Color(0xFF6C4DF6);
+  static const bgBrandPressed = Color(0xFF5A3BD8);
+  static const bgBrandDisabled = Color(0xFF3F3663);
+  static const primaryButton = bgBrand;
+  static const primaryButtonPressed = bgBrandPressed;
+  static const primaryButtonDisabled = bgBrandDisabled;
+  static const lineHeightBody = 1.65;
+  static const fontFamilyBase = <String>["Inter", "Pyidaungsu", "Noto Sans Myanmar", "Myanmar Text", "sans-serif"];
+
   static const light = <String, Color>{
     'bg.canvas': Color(0xFFF6F8FB),
     'bg.surface': Color(0xFFFFFFFF),
@@ -9,9 +19,9 @@ abstract final class HastaTokens {
     'bg.sunken': Color(0xFFEEF1F6),
     'bg.overlay': Color(0x8F111827),
     'bg.brandSubtle': Color(0xFFEAF1FE),
-    'bg.brand': Color(0xFF4C5EF6),
-    'bg.brandPressed': Color(0xFF3D4EE0),
-    'bg.brandDisabled': Color(0x66B9C2FF),
+    'bg.brand': bgBrand,
+    'bg.brandPressed': bgBrandPressed,
+    'bg.brandDisabled': bgBrandDisabled,
     'bg.dangerSubtle': Color(0xFFFDECEC),
     'bg.datingSubtle': Color(0xFFFDECF1),
     'text.primary': Color(0xFF111827),
@@ -34,23 +44,23 @@ abstract final class HastaTokens {
     'state.waiting': Color(0xFFE0A500),
   };
   static const dark = <String, Color>{
-    'bg.canvas': Color(0xFF0E1621),
-    'bg.surface': Color(0xFF16202C),
-    'bg.surfaceRaised': Color(0xFF1E2A38),
+    'bg.canvas': Color(0xFF0D0B13),
+    'bg.surface': Color(0xFF14121C),
+    'bg.surfaceRaised': Color(0xFF1D1A28),
     'bg.sunken': Color(0xFF0A1219),
     'bg.overlay': Color(0xA3000000),
     'bg.brandSubtle': Color(0xFF16243D),
-    'bg.brand': Color(0xFF4C8DFF),
-    'bg.brandPressed': Color(0xFF7C8BFF),
-    'bg.brandDisabled': Color(0x4D4C8DFF),
+    'bg.brand': bgBrand,
+    'bg.brandPressed': bgBrandPressed,
+    'bg.brandDisabled': bgBrandDisabled,
     'bg.dangerSubtle': Color(0xFF2A1518),
     'bg.datingSubtle': Color(0xFF2A1620),
-    'text.primary': Color(0xFFE8EDF4),
-    'text.secondary': Color(0xFF9DA9BA),
+    'text.primary': Color(0xFFF3F1FA),
+    'text.secondary': Color(0xFFB6B1C6),
     'text.tertiary': Color(0xFF6E7A8B),
-    'text.onBrand': Color(0xFF0B1220),
-    'text.link': Color(0xFF4C8DFF),
-    'text.danger': Color(0xFFFF6B70),
+    'text.onBrand': Color(0xFFFFFFFF),
+    'text.link': Color(0xFFC9BCFF),
+    'text.danger': Color(0xFFFFB4AB),
     'icon.primary': Color(0xFFC9D3E0),
     'icon.active': Color(0xFF4C8DFF),
     'border.subtle': Color(0xFF243141),
@@ -63,6 +73,15 @@ abstract final class HastaTokens {
     'state.sending': Color(0xFF6E7A8B),
     'state.read': Color(0xFF4C8DFF),
     'state.waiting': Color(0xFFE0A500),
+    'bg.danger': Color(0xFFB3261E),
+    'bg.warn': Color(0xFF8A5A00),
+    'bg.ok': Color(0xFF1E7A45),
+    'text.disabled': Color(0xFF6E6880),
+    'line.default': Color(0xFF2A2637),
+    'line.strong': Color(0xFF4A4360),
+    'line.focus': Color(0xFF6C4DF6),
+    'icon.default': Color(0xFFB6B1C6),
+    'icon.onBrand': Color(0xFFFFFFFF),
   };
   static const amoled = <String, Color>{
     'bg.canvas': Color(0xFF000000),
@@ -71,9 +90,9 @@ abstract final class HastaTokens {
     'bg.sunken': Color(0xFF000000),
     'bg.overlay': Color(0xA3000000),
     'bg.brandSubtle': Color(0xFF16243D),
-    'bg.brand': Color(0xFF4C8DFF),
-    'bg.brandPressed': Color(0xFF7C8BFF),
-    'bg.brandDisabled': Color(0x4D4C8DFF),
+    'bg.brand': bgBrand,
+    'bg.brandPressed': bgBrandPressed,
+    'bg.brandDisabled': bgBrandDisabled,
     'bg.dangerSubtle': Color(0xFF2A1518),
     'bg.datingSubtle': Color(0xFF2A1620),
     'text.primary': Color(0xFFE8EDF4),
@@ -97,7 +116,7 @@ abstract final class HastaTokens {
   };
 
   static const spacing = <double>[0, 2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64];
-  static const myanmarLineHeight = 1.65;
+  static const myanmarLineHeight = lineHeightBody;
   static const myanmarFontFamily = 'Noto Sans Myanmar';
   static const myanmarType = <String, TextStyle>{
     'display': TextStyle(

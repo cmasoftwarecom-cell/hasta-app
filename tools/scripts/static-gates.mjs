@@ -65,7 +65,7 @@ const gates = {
     assert.deepEqual([...service.matchAll(/^ {4}image:\s*(.*)$/gm)].map((m) => m[1]), ['postgres:16']);
   },
   DS: () => {
-    for (const path of mobile.filter((path) => path !== 'apps/mobile/lib/core/design/tokens.dart')) {
+    for (const path of mobile.filter((path) => path !== 'apps/mobile/lib/design_tokens.g.dart')) {
       assert.doesNotMatch(read(path), /(?:0x[\da-f]{6,8}|#[\da-f]{6,8})\b/i, path);
     }
   },

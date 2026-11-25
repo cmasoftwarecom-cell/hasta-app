@@ -5,16 +5,16 @@
 
 ## Head
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
-- DS: `1.0.1`
+- DS: `1.0.2` (canonical DTCG)
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
+- updated: `2026-11-25` by `agent` for `P0-DESIGN-TOKENS-GATE`
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
 - blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
-- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
-- open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), existing draft, S1 plus partial S2 (`feature/HAS-1a-guest-auth`)
+- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run); [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2) (S1 plus partial S2; `16282e5`)
+- open PRs: [#3](https://github.com/cmasoftwarecom-cell/hasta-app/pull/3) (Gmail Link); [#4](https://github.com/cmasoftwarecom-cell/hasta-app/pull/4) (Security & Devices)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
@@ -27,7 +27,7 @@ P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility t
 
 T46 exercises an active refresh token on a different enrolled binding and checks HTTP 401, committed revocation of the entire family, and survival of unrelated sessions in isolated PostgreSQL 16.
 
-The DS widget gate checks the rendered `bg.brand`, `bg.brandPressed`, and `bg.brandDisabled` fills, and the generated disabled opacity for light, dark, and AMOLED. The tracked DS 1.0.1 source remains canonical under ADR-0011.
+P0-DESIGN-TOKENS-GATE: `assets/design-tokens.json` is the canonical DS 1.0.2 DTCG source. The Section 2.3 gate was RED before the fix; committed fixtures reject a misplaced source, broken/circular aliases, missing brand states, low Myanmar line height, missing Myanmar fonts, missing CI wiring and generated Dart drift. A hard-coded pressed fill failed the static and EN/MM widget checks; removing the workflow check failed the CI wiring fixture. DTCG fills replace the old opacity overrides; legacy theme variants, spacing and text roles not supplied by DTCG remain compatibility data. Clean hosted Flutter jobs remain blocked separately by `intl 0.20.3` with the pinned Flutter 3.24.5 SDK.
 
 The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
 

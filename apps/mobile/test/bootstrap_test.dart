@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:mobile/core/design/tokens.dart';
+import 'package:mobile/design_tokens.g.dart';
 import 'package:mobile/features/auth/domain/guest_session.dart';
 import 'package:mobile/main.dart';
 
@@ -42,49 +42,60 @@ class _GuestSession implements GuestSession {
 }
 
 void main() {
-  testWidgets('DS primary fill: welcome button renders brand and brandPressed',
-      (tester) async {
-    await tester.pumpWidget(
-        HastaApp(session: _GuestSession(), locale: const Locale('en')));
-    await tester.pumpAndSettle();
-    final button = find.byType(FilledButton);
-    Color? fill() => tester
-        .widget<Material>(find.descendant(
-          of: button,
-          matching: find.byType(Material),
-        ))
-        .color;
-    expect(fill(), HastaTokens.light['bg.brand']);
-    final press = await tester.startGesture(tester.getCenter(button));
-    await tester.pumpAndSettle();
-    expect(fill(), HastaTokens.light['bg.brandPressed']);
-    await press.cancel();
-    await tester.pumpAndSettle();
-    expect(fill(), HastaTokens.light['bg.brand']);
-  });
+  for (final locale in const [Locale('en'), Locale('my')]) {
+    testWidgets(
+        'DS primary fill: welcome button renders brand and brandPressed (${locale.languageCode})',
+        (tester) async {
+      await tester
+          .pumpWidget(HastaApp(session: _GuestSession(), locale: locale));
+      await tester.pumpAndSettle();
+      final button = find.byType(FilledButton);
+      Color? fill() => tester
+          .widget<Material>(find.descendant(
+            of: button,
+            matching: find.byType(Material),
+          ))
+          .color;
+      expect(fill(), HastaTokens.light['bg.brand']);
+      final press = await tester.startGesture(tester.getCenter(button));
+      await tester.pumpAndSettle();
+      expect(fill(), HastaTokens.light['bg.brandPressed']);
+      await press.cancel();
+      await tester.pumpAndSettle();
+      expect(fill(), HastaTokens.light['bg.brand']);
+    });
 
-  testWidgets('DS primary fill: busy welcome button renders brandDisabled',
-      (tester) async {
-    await tester.pumpWidget(
-        HastaApp(session: _GuestSession(), locale: const Locale('en')));
-    final button = find.byType(FilledButton);
-    expect(tester.widget<FilledButton>(button).onPressed, isNull);
-    final fill = tester
-        .widget<Material>(find.descendant(
-          of: button,
-          matching: find.byType(Material),
-        ))
-        .color;
-    expect(fill, HastaTokens.light['bg.brandDisabled']);
-    await tester.pumpAndSettle();
-    expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
-  });
+    testWidgets(
+        'DS primary fill: busy welcome button renders brandDisabled (${locale.languageCode})',
+        (tester) async {
+      await tester
+          .pumpWidget(HastaApp(session: _GuestSession(), locale: locale));
+      final button = find.byType(FilledButton);
+      expect(tester.widget<FilledButton>(button).onPressed, isNull);
+      final fill = tester
+          .widget<Material>(find.descendant(
+            of: button,
+            matching: find.byType(Material),
+          ))
+          .color;
+      expect(fill, HastaTokens.light['bg.brandDisabled']);
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
+    });
+  }
 
-  test('DS primary fill: disabled opacity is 40% light and 30% dark/AMOLED',
-      () {
-    expect(HastaTokens.light['bg.brandDisabled']!.alpha, (255 * .4).round());
-    expect(HastaTokens.dark['bg.brandDisabled']!.alpha, (255 * .3).round());
-    expect(HastaTokens.amoled['bg.brandDisabled']!.alpha, (255 * .3).round());
+  test('DS: every palette uses the three canonical brand fills', () {
+    for (final palette in [
+      HastaTokens.light,
+      HastaTokens.dark,
+      HastaTokens.amoled
+    ]) {
+      expect(palette['bg.brand'], HastaTokens.bgBrand);
+      expect(palette['bg.brandPressed'], HastaTokens.bgBrandPressed);
+      expect(palette['bg.brandDisabled'], HastaTokens.bgBrandDisabled);
+    }
+    expect(HastaTokens.lineHeightBody, greaterThanOrEqualTo(1.65));
+    expect(HastaTokens.fontFamilyBase, contains(HastaTokens.myanmarFontFamily));
   });
 
   void setLargeTextViewport(WidgetTester tester) {

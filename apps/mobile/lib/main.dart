@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
-import 'core/design/tokens.dart';
+import 'design_tokens.g.dart';
 import 'features/auth/data/guest_repository.dart';
 import 'features/auth/data/native_qr_surface.dart';
 import 'features/auth/domain/guest_session.dart';
@@ -53,12 +53,12 @@ class HastaApp extends StatelessWidget {
           style: ButtonStyle(
             backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
               if (states.contains(WidgetState.disabled)) {
-                return palette['bg.brandDisabled']!;
+                return HastaTokens.primaryButtonDisabled;
               }
               if (states.contains(WidgetState.pressed)) {
-                return palette['bg.brandPressed']!;
+                return HastaTokens.primaryButtonPressed;
               }
-              return palette['bg.brand']!;
+              return HastaTokens.primaryButton;
             }),
             // The pressed fill already represents the interaction. Keep the
             // Material defaults for focus and hover without tinting that fill.

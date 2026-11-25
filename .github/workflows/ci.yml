@@ -67,6 +67,7 @@ jobs:
           npm --prefix apps/server ci
           npm --prefix apps/server run build
           node --test tools/scripts/identity-gate.test.mjs
+          node --test tools/scripts/design-tokens.test.mjs
           node tools/scripts/static-gates.mjs
           node tools/scripts/design-tokens.mjs --check
       - name: T47 OpenAPI lint and breaking changes versus the release baseline
