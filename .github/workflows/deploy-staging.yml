@@ -61,17 +61,12 @@ jobs:
           fi
           command -v dig && command -v jq && command -v curl
 
-      - name: Transfer image and replace staging container
+      - name: Transfer, verify and commit staging release
         env:
           DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
           STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
           STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
           STAGING_SSH_KNOWN_HOSTS: ${{ vars.STAGING_SSH_KNOWN_HOSTS }}
-        run: bash tools/scripts/deploy-staging.sh ship "$DEPLOY_SHA" "$RUNNER_TEMP/api.tar.gz"
-
-      - name: Health contract (200 + SHA + env echo)
-        env:
-          DEPLOY_SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          bash docs/repo-ready/verify-staging.sh https://api-staging.hasta.app "$DEPLOY_SHA"
+          bash tools/scripts/deploy-staging.sh ship "$DEPLOY_SHA" "$RUNNER_TEMP/api.tar.gz" https://api-staging.hasta.app
