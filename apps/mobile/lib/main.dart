@@ -36,6 +36,26 @@ class HastaApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: colors,
         scaffoldBackgroundColor: palette['bg.canvas'],
+        filledButtonTheme: FilledButtonThemeData(
+          style: ButtonStyle(
+            backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return palette['bg.brandDisabled']!;
+              }
+              if (states.contains(WidgetState.pressed)) {
+                return palette['bg.brandPressed']!;
+              }
+              return palette['bg.brand']!;
+            }),
+            // The pressed fill already represents the interaction. Keep the
+            // Material defaults for focus and hover without tinting that fill.
+            overlayColor: WidgetStateProperty.resolveWith<Color?>(
+              (states) => states.contains(WidgetState.pressed)
+                  ? Colors.transparent
+                  : null,
+            ),
+          ),
+        ),
         textTheme: TextTheme(
           headlineMedium: type['display'],
           titleLarge: type['h1'],

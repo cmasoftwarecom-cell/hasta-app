@@ -24,6 +24,8 @@ T37 uses a route and identity-module boundary check with local behavioural fixtu
 
 T46 exercises an active refresh token on a different enrolled binding and checks HTTP 401, committed revocation of the entire family, and survival of unrelated sessions in isolated PostgreSQL 16.
 
+The DS widget gate checks the rendered `bg.brand`, `bg.brandPressed`, and `bg.brandDisabled` fills, and the generated disabled opacity for light, dark, and AMOLED. The tracked DS 1.0.1 source remains canonical under ADR-0011.
+
 The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
 
 `T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API. The first native run did not reach the guest profile; the [diagnostic rerun](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45393944704/job/138444624882) timed out while loading the test suite after building the app, so it did not verify either ID. `T36` passed the iOS debug/unsigned release artifact comparison. Deployed staging QA is separate: HTTPS `/health` has not been verified, and no staging fixtures were seeded. See the [origin runbook and 12 checks](../docs/qa/s1-staging.md). Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
@@ -40,6 +42,7 @@ The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression fo
 | S1 pre-auth replay, credentials, policy injection and draft scope | draft | [ADR-0008](../decisions/adr/ADR-0008-guest-auth.md) |
 | S1 installation proof; replay retention and state; secure storage dependencies and QA fixture scope | proposed in PR #2 | [ADR-0009](../decisions/adr/ADR-0009-s1-enrollment-and-mobile.md) |
 | T47 frozen S1 contract until a previous release tag exists | proposed in PR #2 | [ADR-0010](../decisions/adr/ADR-0010-openapi-bootstrap-baseline.md) |
+| Primary-button semantic fills and canonical DS 1.0.1 source | proposed in PR #2 | [ADR-0011](../decisions/adr/ADR-0011-primary-button-token-source.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
@@ -52,7 +55,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix Tokens
+Hasta review PR #2
 ```
 
 ## Changelog (append one line per merged PR)
