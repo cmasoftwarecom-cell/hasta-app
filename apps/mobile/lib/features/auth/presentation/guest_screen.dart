@@ -7,6 +7,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import '../../../core/design/tokens.dart';
 import '../data/guest_repository.dart';
 import '../data/native_qr_surface.dart';
+import '../data/native_recovery_browser.dart';
 import '../domain/guest_session.dart';
 import 'device_transfer_screen.dart';
 
@@ -16,9 +17,11 @@ const _qa = !kReleaseMode &&
     (_environment == 'dev' || _environment == 'test' || _environment == 'beta');
 
 class GuestScreen extends StatefulWidget {
-  const GuestScreen({super.key, required this.session, this.transferSurface});
+  const GuestScreen(
+      {super.key, required this.session, this.transferSurface, this.gmail});
   final GuestSession session;
   final NativeQrSurface? transferSurface;
+  final GmailLinkActions? gmail;
 
   @override
   State<GuestScreen> createState() => _GuestScreenState();
@@ -29,6 +32,8 @@ class _GuestScreenState extends State<GuestScreen> {
   AuthFailure? _failure;
   bool _busy = true;
   bool _settings = false;
+  bool _linkedAccounts = false, _gmailReady = false, _connectingGmail = false;
+  String? _maskedGmail;
   Timer? _press;
   Future<void> Function()? _retry;
   bool _transferReady = false;
@@ -46,6 +51,7 @@ class _GuestScreenState extends State<GuestScreen> {
   void dispose() {
     _press?.cancel();
     widget.transferSurface?.detach();
+    widget.gmail?.cancel();
     super.dispose();
   }
 
@@ -132,7 +138,8 @@ class _GuestScreenState extends State<GuestScreen> {
       if (result != null && mounted) {
         setState(() {
           _profile = result.profile;
-          _settings = false;
+          _settings = _linkedAccounts = _gmailReady = false;
+          _maskedGmail = null;
           _failure = null;
         });
       } else if (!receiving && mounted) {
@@ -147,6 +154,34 @@ class _GuestScreenState extends State<GuestScreen> {
         final profile = await widget.session.enter(locale);
         if (mounted) _profile = profile;
       });
+
+  Future<void> _gmail({bool connect = false}) => _run(() async {
+        final gmail = widget.gmail!;
+        final account = _profile!.accountId;
+        setState(() {
+          _linkedAccounts = true;
+          _connectingGmail = connect;
+        });
+        try {
+          _maskedGmail = connect
+              ? await gmail.connect(account)
+              : await gmail.status(account);
+          _gmailReady = true;
+        } on AuthFailure catch (error) {
+          if (error.code != 'recovery_cancelled') rethrow;
+        } finally {
+          _connectingGmail = false;
+        }
+      });
+
+  void _backFromSettings() {
+    setState(() {
+      _settings = _linkedAccounts;
+      if (_linkedAccounts) _failure = null;
+      _linkedAccounts = _gmailReady = false;
+      _maskedGmail = null;
+    });
+  }
 
   Future<void> _signOut() => _run(() async {
         await widget.session.signOut();
@@ -194,6 +229,11 @@ class _GuestScreenState extends State<GuestScreen> {
     final offline = failure?.offline == true;
     final retry = _retry;
     final heading = Text(copy.appTitle, style: style.headlineMedium);
+    final title = _linkedAccounts
+        ? copy.linkedAccounts
+        : _settings
+            ? copy.settings
+            : copy.profile;
     return Scaffold(
       body: SafeArea(
         child: Align(
@@ -209,18 +249,12 @@ class _GuestScreenState extends State<GuestScreen> {
                     constraints: BoxConstraints(minHeight: space[10]),
                     child: Row(
                       children: [
-                        if (_settings)
-                          BackButton(
-                            onPressed: _busy
-                                ? null
-                                : () => setState(() => _settings = false),
-                          ),
+                        if (_settings && !_busy)
+                          BackButton(onPressed: _backFromSettings),
                         Expanded(
                           child: Semantics(
                             header: true,
-                            child: Text(
-                                _settings ? copy.settings : copy.profile,
-                                style: style.titleLarge),
+                            child: Text(title, style: style.titleLarge),
                           ),
                         ),
                         if (!_settings)
@@ -254,10 +288,36 @@ class _GuestScreenState extends State<GuestScreen> {
                   SizedBox(height: space[4]),
                   Text(copy.guestRisk),
                   SizedBox(height: space[6]),
+                ] else if (_linkedAccounts) ...[
+                  if (_maskedGmail case final masked?) ...[
+                    Text(copy.gmailLinked(masked)),
+                    Text(copy.gmailUnlinkGuard),
+                  ] else ...[
+                    Text(copy.guestRisk),
+                    FilledButton(
+                      onPressed: _busy ||
+                              !_gmailReady ||
+                              offline ||
+                              failure?.status == 404 ||
+                              failure?.code == 'configuration'
+                          ? null
+                          : () => _gmail(connect: true),
+                      child: Text(copy.connectGmail),
+                    ),
+                  ],
+                  if (_connectingGmail)
+                    TextButton(
+                        onPressed: widget.gmail!.cancel,
+                        child: Text(copy.gmailCancel)),
                 ] else if (_settings) ...[
                   Text(copy.account, style: style.titleLarge),
                   Text(copy.guestRisk),
                   SizedBox(height: space[5]),
+                  if (widget.gmail != null)
+                    OutlinedButton(
+                      onPressed: _busy ? null : () => _gmail(),
+                      child: Text(copy.linkedAccounts),
+                    ),
                   if (_transferReady)
                     OutlinedButton(
                       onPressed: _busy || offline
@@ -288,14 +348,18 @@ class _GuestScreenState extends State<GuestScreen> {
                   SizedBox(height: space[4]),
                   Semantics(
                       liveRegion: true,
-                      child: Text(offline
-                          ? copy.offline
-                          : failure.status == 429
-                              ? copy.rateLimited
-                              : copy.genericError)),
+                      child: Text(switch (failure) {
+                        AuthFailure(offline: true) => copy.offline,
+                        AuthFailure(code: 'identity_in_use') => copy.gmailInUse,
+                        AuthFailure(code: 'google_email_unverified') =>
+                          copy.gmailUnverified,
+                        AuthFailure(status: 429) => copy.rateLimited,
+                        _ => copy.genericError,
+                      })),
                   if (profile != null && retry != null)
                     TextButton(
-                        onPressed: _busy ? null : () => _run(retry),
+                        onPressed: () =>
+                            _linkedAccounts ? _gmail() : _run(retry),
                         child: Text(copy.retry)),
                 ],
                 if (profile == null) ...[

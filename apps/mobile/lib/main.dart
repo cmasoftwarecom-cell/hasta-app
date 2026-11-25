@@ -5,6 +5,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'core/design/tokens.dart';
 import 'features/auth/data/guest_repository.dart';
 import 'features/auth/data/native_qr_surface.dart';
+import 'features/auth/data/native_recovery_browser.dart';
 import 'features/auth/domain/guest_session.dart';
 import 'features/auth/presentation/guest_screen.dart';
 
@@ -14,8 +15,16 @@ void main() {
   const qrQa = kDebugMode &&
       bool.fromEnvironment('HASTA_AUTH_QR_TRANSFER_ENABLED') &&
       (env == 'dev' || env == 'test' || env == 'beta');
+  const gmailQa =
+      kDebugMode && bool.fromEnvironment('HASTA_AUTH_GOOGLE_LINK_ENABLED');
+  final session = GuestRepository();
   runApp(HastaApp(
-    session: GuestRepository(),
+    session: session,
+    gmail: gmailQa &&
+            (defaultTargetPlatform == TargetPlatform.android ||
+                defaultTargetPlatform == TargetPlatform.iOS)
+        ? GmailLinkFlow(session)
+        : null,
     transferSurface: qrQa && defaultTargetPlatform == TargetPlatform.android
         ? const NativeQrSurface()
         : null,
@@ -24,11 +33,16 @@ void main() {
 
 class HastaApp extends StatelessWidget {
   const HastaApp(
-      {super.key, required this.session, this.locale, this.transferSurface});
+      {super.key,
+      required this.session,
+      this.locale,
+      this.transferSurface,
+      this.gmail});
 
   final GuestSession session;
   final Locale? locale;
   final NativeQrSurface? transferSurface;
+  final GmailLinkActions? gmail;
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +92,8 @@ class HastaApp extends StatelessWidget {
         ).apply(bodyColor: colors.onSurface, displayColor: colors.onSurface),
         fontFamily: HastaTokens.myanmarFontFamily,
       ),
-      home: GuestScreen(session: session, transferSurface: transferSurface),
+      home: GuestScreen(
+          session: session, transferSurface: transferSurface, gmail: gmail),
     );
   }
 }

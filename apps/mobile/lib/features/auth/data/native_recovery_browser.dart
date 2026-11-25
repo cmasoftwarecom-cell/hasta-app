@@ -13,6 +13,7 @@ class NativeRecoveryBrowser {
 
   final MethodChannel _channel;
   static bool _busy = false;
+  void Function()? _cancel;
 
   Future<Uri> trustedRedirect() async {
     final raw = await _channel.invokeMethod<String>('trustedRedirect');
@@ -39,6 +40,8 @@ class NativeRecoveryBrowser {
         timeout: timeout,
       );
 
+  void cancel() => _cancel?.call();
+
   Future<Uri> waitForCallback(
     GmailRecoveryConsent consent, {
     required Future<void> Function() open,
@@ -48,6 +51,10 @@ class NativeRecoveryBrowser {
     if (_busy) throw const AuthFailure('request_in_progress');
     _busy = true;
     final result = Completer<Uri>();
+    _cancel = () {
+      if (result.isCompleted) return;
+      result.completeError(const AuthFailure('recovery_cancelled'));
+    };
     Timer? timer;
     _channel.setMethodCallHandler((call) async {
       if (call.method != 'callback' ||
@@ -85,9 +92,49 @@ class NativeRecoveryBrowser {
       throw const AuthFailure('recovery_browser_unavailable');
     } finally {
       timer?.cancel();
+      _cancel = null;
       _channel.setMethodCallHandler(null);
       _busy = false;
     }
+  }
+}
+
+abstract interface class GmailLinkActions {
+  Future<String?> status(String accountId);
+  Future<String> connect(String accountId);
+  void cancel();
+}
+
+class GmailLinkFlow implements GmailLinkActions {
+  GmailLinkFlow(this.repository);
+
+  final GuestRepository repository;
+  final browser = NativeRecoveryBrowser();
+  int _attempt = 0;
+
+  @override
+  Future<String?> status(String accountId) => repository.linkedGmail(accountId);
+
+  @override
+  Future<String> connect(String accountId) async {
+    final attempt = ++_attempt;
+    void requireActive() {
+      if (attempt != _attempt) throw const AuthFailure('recovery_cancelled');
+    }
+
+    final consent = await repository.beginGmailRecovery(
+        await browser.trustedRedirect(),
+        linkAccountId: accountId);
+    requireActive();
+    final callback = await browser.authorize(consent);
+    requireActive();
+    return repository.finishGmailLink(accountId, consent, callback);
+  }
+
+  @override
+  void cancel() {
+    _attempt++;
+    browser.cancel();
   }
 }
 

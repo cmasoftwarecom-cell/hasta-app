@@ -3,6 +3,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:mobile/core/design/tokens.dart';
+import 'package:mobile/features/auth/data/native_recovery_browser.dart';
 import 'package:mobile/features/auth/domain/guest_session.dart';
 import 'package:mobile/main.dart';
 
@@ -39,6 +40,26 @@ class _GuestSession implements GuestSession {
 
   @override
   Future<void> close() async {}
+}
+
+class _GmailActions implements GmailLinkActions {
+  bool offline = true;
+  String? connectedAccount;
+
+  @override
+  Future<String?> status(String accountId) async {
+    if (offline) throw const AuthFailure('network', offline: true);
+    return null;
+  }
+
+  @override
+  Future<String> connect(String accountId) async {
+    connectedAccount = accountId;
+    return 'a***@example.invalid';
+  }
+
+  @override
+  void cancel() {}
 }
 
 void main() {
@@ -80,11 +101,10 @@ void main() {
     expect(tester.widget<FilledButton>(button).onPressed, isNotNull);
   });
 
-  test('DS primary fill: disabled opacity is 40% light and 30% dark/AMOLED',
-      () {
+  test('DS 1.0.2 primary fill: disabled opacity is 40% in all palettes', () {
     expect(HastaTokens.light['bg.brandDisabled']!.alpha, (255 * .4).round());
-    expect(HastaTokens.dark['bg.brandDisabled']!.alpha, (255 * .3).round());
-    expect(HastaTokens.amoled['bg.brandDisabled']!.alpha, (255 * .3).round());
+    expect(HastaTokens.dark['bg.brandDisabled']!.alpha, (255 * .4).round());
+    expect(HastaTokens.amoled['bg.brandDisabled']!.alpha, (255 * .4).round());
   });
 
   void setLargeTextViewport(WidgetTester tester) {
@@ -114,6 +134,34 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
+    testWidgets('T37/T43: Gmail linking only in Settings ($language)',
+        (tester) async {
+      final copy = await AppLocalizations.delegate.load(Locale(language));
+      final gmail = _GmailActions();
+      Future<void> tap(Finder target) async {
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(HastaApp(
+          session: _GuestSession(), locale: Locale(language), gmail: gmail));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.connectGmail), findsNothing);
+      await tap(find.text(copy.welcomeContinue));
+      await tap(find.byTooltip(copy.settings));
+      await tap(find.text(copy.linkedAccounts));
+      final connect = find.widgetWithText(FilledButton, copy.connectGmail);
+      expect(find.text(copy.offline), findsOneWidget);
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+      gmail.offline = false;
+      await tap(find.text(copy.retry));
+      await tap(connect);
+      expect(gmail.connectedAccount, 'guest');
+      expect(
+          find.text(copy.gmailLinked('a***@example.invalid')), findsOneWidget);
+      expect(find.text(copy.gmailUnlinkGuard), findsOneWidget);
+    });
+
     testWidgets('T30/T40: Welcome explains unlinked account loss ($language)',
         (tester) async {
       setLargeTextViewport(tester);

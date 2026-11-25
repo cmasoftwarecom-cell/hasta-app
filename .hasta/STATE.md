@@ -4,17 +4,17 @@
 > This file is why a one-line prompt works. Do not delete history; append and roll forward.
 
 ## Head
-- SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
-- DS: `1.0.1`
+- SPEC: `1.0.2`
+- DS: `1.0.2`
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
+- updated: `2026-11-25` by `agent` on `feature/HAS-2a-gmail-link`
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
-- blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
+- blocked by: native Gmail-link consent and signed HTTPS association QA, explicit recovery entry outside Welcome, native Android/iOS recovery, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Security/Devices, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
-- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
-- open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), existing draft, S1 plus partial S2 (`feature/HAS-1a-guest-auth`)
+- completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run); [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2) (S1 plus partial S2; `16282e5`)
+- open PRs: [#3](https://github.com/cmasoftwarecom-cell/hasta-app/pull/3), S2 Gmail Link (`feature/HAS-2a-gmail-link`)
 - reconciliation: imported state claimed S0/S1 shipped and PR #2 was open, but the actual `main` held only the skills/spec package and GitHub returned no PRs. Keep the imported entries below for provenance; do not issue gate or ADR credits from them.
 
 ## Gates currently enforced
@@ -27,7 +27,7 @@ P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility t
 
 T46 exercises an active refresh token on a different enrolled binding and checks HTTP 401, committed revocation of the entire family, and survival of unrelated sessions in isolated PostgreSQL 16.
 
-The DS widget gate checks the rendered `bg.brand`, `bg.brandPressed`, and `bg.brandDisabled` fills, and the generated disabled opacity for light, dark, and AMOLED. The tracked DS 1.0.1 source remains canonical under ADR-0011.
+The DS widget gate checks the rendered `bg.brand`, `bg.brandPressed`, and `bg.brandDisabled` fills, and the generated disabled opacity for light, dark, and AMOLED. ADR-0011 records the DS 1.0.1 history; DS 1.0.2 now uses 40% in all palettes.
 
 The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
 
@@ -61,6 +61,8 @@ P1-QR-START-RETRY: The mobile repository now scopes the pending QR-start key to 
 
 P2-WELCOME-RECOVERY-COPY: Welcome now renders the guest account-loss warning as plain text. English states that an account cannot be recovered if the device is lost without Gmail linked; Myanmar uses the normative SPEC §14.7 copy. T30/T40 widget regressions cover both locales at 320×568 and 200% text scale; T37 still permits only Guest and Privacy actions on Welcome. This does not expose recovery or qualify native T30.
 
+S2 Gmail Link (PR #3): signed-in Linked Accounts uses code-only consent and a masked status endpoint that preserves the frozen `/me` contract. Local T37/T38/T39/T43 fixtures cover provider boundaries, no merge, and the offline disabled action. T44 purchase attachment, native OAuth, T28 and native T30 remain open. ADR-0012 records the opt-in scope. SPEC and DS 1.0.2 are at their canonical paths. T49/T50 and the revised T45/T48 semantics are open separately.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -91,7 +93,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta test T28 on two dedicated local Android phones
+Hasta review PR #3
 ```
 
 ## Changelog (append one line per merged PR)
@@ -99,3 +101,4 @@ Hasta test T28 on two dedicated local Android phones
 - Imported, unverified: `PR #2` (planned) — T37 rewrite + T46/T47/T48 + device-bound refresh + brand tokens
 - `2026-11-24` — reconciled imported state against `main`; actual S0 scaffold submitted for review.
 - `PR #1` — S0 scaffold merged; S1 backend work starts on a new branch.
+- `PR #2` (`16282e5`) — merged S1 and partial S2 server/QA groundwork; native S2 gates remain open.

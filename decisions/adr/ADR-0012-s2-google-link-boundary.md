@@ -1,6 +1,6 @@
 # ADR-0012: Keep the initial Gmail boundary code-only and opt-in
 
-Status: proposed in draft PR #2.
+Status: server boundary merged in PR #2; signed-in debug UI follows in PR #3.
 
 - Pin `google-auth-library` 10.9.1 in the Node 20 server. Keep the integration under `modules/identity` and exercise the real verifier offline using ephemeral RSA keys. Reject invalid signatures without logging provider error payloads.
 - SPEC §5.4 uses an OAuth authorization code and a server exchange, but the API-contract example also includes a client-provided Google token. The implementation accepts only `code`, `state`, and the existing enrollment credentials; a client-supplied provider token is rejected. The installed device must prove possession in addition to the active bearer session. DELETE credentials use `Device-Token` and `Device-Proof` headers, not a DELETE body.
@@ -8,5 +8,6 @@ Status: proposed in draft PR #2.
 - Reject removal of Gmail when it is the only recovery method. The unlink guard does not count an existing device, guest identity, or disabled provider as a lost-device recovery method.
 - Session revocation by ID revokes the owned refresh family; signing out other devices revokes their sessions but does not delete bindings. Revocation by ID may include the current session. Only an exact, proved retry may replay its 204.
 - Unlike the link-flag default in the SPEC, this incremental draft defaults the env flag off until the mobile consent, recovery, transfer, and S2 QA work is complete. This change does not introduce a provider sign-in endpoint or add provider controls to Welcome.
+- The mobile link UI requires `HASTA_AUTH_GOOGLE_LINK_ENABLED=true` in a debug build and on the API. For native QA, `HASTA_GOOGLE_REDIRECT_URI` must match the app's existing registered HTTPS callback. The app reuses that external-browser transport rather than adding native browser sessions; link and recovery still validate independent consent and linking never replaces the local session. Linked Accounts uses the new masked status read, not full-email reveal, and explains the unlink guard. Native provider consent and app association remain unverified.
 
 Migration: the generated schema diff appends `google_linked` to `abuse_event`. The audit entry records an existing hashed device identifier and the event, with no provider subject or email. To roll back, disable the link flag and deploy the previous app; keep the additive enum value and historical events rather than recreating the PostgreSQL enum.

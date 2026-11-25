@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Header, Headers, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Headers, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
 import { AccessGuard, bearer } from '../auth/controller';
 import { GoogleLinks } from './link-service';
 import { ConsentResponse as Reply, completionFields as completeFields,
@@ -8,6 +8,11 @@ import { ConsentResponse as Reply, completionFields as completeFields,
 @UseGuards(AccessGuard)
 export class GoogleLinkController {
   constructor(private readonly links: GoogleLinks) {}
+
+  @Get() @Header('Cache-Control', 'no-store')
+  status(@Headers('authorization') auth: string) {
+    return this.links.status(bearer(auth));
+  }
 
   // Escape Express's named-parameter syntax; the colon is literal on the wire.
   @Post('link\\:start') @HttpCode(200) @Header('Cache-Control', 'no-store')

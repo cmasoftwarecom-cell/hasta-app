@@ -95,6 +95,16 @@
       }
     },
     "/auth/identities/google": {
+      "get": {
+        "tags": ["Auth"], "operationId": "getGoogleLink", "description": "Returns the signed-in account's masked Google identity, or null when unlinked.",
+        "security": [{ "Bearer": [] }], "responses": {
+          "200": { "description": "Current Google link status.", "content": { "application/json": { "schema": {
+            "type": "object", "required": ["identity"],
+            "properties": { "identity": { "oneOf": [{ "$ref": "#/components/schemas/LinkedGoogle" }, { "type": "object", "nullable": true, "enum": [null] }] } }
+          } } } },
+          "401": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
       "delete": {
         "tags": ["Auth"], "operationId": "unlinkGoogle", "description": "Returns a conflict if removing Google would leave no lost-device recovery method.",
         "security": [{ "Bearer": [] }], "parameters": [
