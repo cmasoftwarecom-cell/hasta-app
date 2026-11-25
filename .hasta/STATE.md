@@ -57,6 +57,8 @@ P1-QR-CLAIM-EXPIRY: After a registered scan, both local timeout and a server cla
 
 P2-QR-TITLE-SCALE: Sender and receiver titles are wrapping accessibility headings inside the safe, scrollable content, using the existing screen-title token. Four T28/DS widget cases (en/my at 320×568 and 200%) failed with the old AppBar's scale cap and passed with full scaling, safe-area bounds, and ≥1.65 line height. QR contents and actions are unchanged. The local native T28 runner still requires two authorized Android phones.
 
+P1-QR-START-RETRY: The mobile repository now scopes the pending QR-start key to the source account and enrollment request, not the rotating access token. A T25/T27/T28/T29 loopback repository regression first records a committed offer with an ambiguous 503 response, then refreshes access and checks that the retry sends the same key, receives the original offer and expiry, and clears the pending record. The server, API, 120-second TTL, and local-only rollout gate are unchanged. Native T28 remains open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -87,7 +89,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta test T28 on two dedicated local Android phones
+Hasta fix P2-WELCOME-RECOVERY-COPY
 ```
 
 ## Changelog (append one line per merged PR)

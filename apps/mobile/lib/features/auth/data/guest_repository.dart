@@ -152,9 +152,10 @@ class GuestRepository implements GuestSession {
 
   Future<T> _write<T>(
       String path, Document body, Future<T> Function(Document) apply,
-      {String? access}) async {
+      {String? access, String? retryAccountId}) async {
     // Persist the UUID before the network request. No plaintext inputs are stored in the pending record.
-    final slot = 'pending.${_digest(jsonEncode([path, body, access]))}';
+    final scope = retryAccountId == null ? access : ['account', retryAccountId];
+    final slot = 'pending.${_digest(jsonEncode([path, body, scope]))}';
     final key = await _read(slot) ?? _uuid7();
     await _save(slot, key);
     try {
@@ -341,7 +342,10 @@ class GuestRepository implements GuestSession {
           'approval_key': await approval.publicKey(),
         },
         (reply) async => TransferOffer.fromReply(reply),
-        access: source['access'] as String);
+        access: source['access'] as String,
+        // The server scopes start replays to the account and proved device.
+        // An access refresh must not detach the pending write from that scope.
+        retryAccountId: source['account_id'] as String);
   }
 
   Future<TransferProgress> deviceTransferStatus(TransferOffer offer) async {

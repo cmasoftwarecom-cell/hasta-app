@@ -87,7 +87,7 @@ void main() {
   });
 
   test(
-      'T27/T28/T29 repository: waits for approval, retries the same write and clears the source',
+      'T25/T27/T28/T29 repository: retries QR start across refresh and waits for approval',
       () => HttpOverrides.runWithHttpOverrides(() async {
             final saved = driftRuntimeOptions.dontWarnAboutMultipleDatabases;
             driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
@@ -111,6 +111,8 @@ void main() {
                 .toIso8601String();
             final account = {'id': 'same-account', 'is_guest': true};
             final calls = <(String, String?, String?, Document)>[];
+            final offersByKey = <String, Document>{};
+            var dropStartReply = true;
             var confirmed = false;
             var confirmations = 0;
             var occupied = true;
@@ -121,8 +123,8 @@ void main() {
                   ? <String, dynamic>{}
                   : jsonDecode(await utf8.decoder.bind(request).join())
                       as Document;
-              calls.add(
-                  (path, auth, request.headers.value('idempotency-key'), body));
+              final key = request.headers.value('idempotency-key');
+              calls.add((path, auth, key, body));
               final response = request.response;
               response.headers.contentType = ContentType.json;
               Document error(int status, String code) {
@@ -132,6 +134,22 @@ void main() {
                 };
               }
 
+              Document start() {
+                final offer = offersByKey.putIfAbsent(
+                    key!,
+                    () => {
+                          'transfer_id': id.replaceRange(id.length - 1,
+                              id.length, '${offersByKey.length + 1}'),
+                          'qr_payload': payload,
+                          'expires_at': deadline,
+                        });
+                if (dropStartReply) {
+                  dropStartReply = false;
+                  return error(503, 'unavailable');
+                }
+                return offer;
+              }
+
               final reply = switch (path.split('/').last) {
                 'register' => {'device_token': body['raw_device_id']},
                 'guest' => {
@@ -139,12 +157,14 @@ void main() {
                     'access_token': 'old-access',
                     'refresh_token': 'old-refresh',
                   },
-                'me' => {'account': account, 'profile': account},
-                'start' => {
-                    'transfer_id': id,
-                    'qr_payload': payload,
-                    'expires_at': deadline,
+                'me' when !dropStartReply && auth == 'Bearer old-access' =>
+                  error(401, 'token_expired'),
+                'refresh' => {
+                    'access_token': 'refreshed-access',
+                    'refresh_token': 'refreshed-refresh',
                   },
+                'me' => {'account': account, 'profile': account},
+                'start' => start(),
                 id => {
                     'status': 'awaiting_confirmation',
                     'approval_challenge': challenge,
@@ -196,7 +216,25 @@ void main() {
             final old = repository('source-device', oldStore);
             final target = repository('target-device', newStore);
             await old.enter('en');
+            await expectLater(old.startDeviceTransfer(native),
+                throwsA(failure('unavailable')));
             final offer = await old.startDeviceTransfer(native);
+            final starts =
+                calls.where((call) => call.$1.endsWith('/start')).toList();
+            expect(starts.map((call) => call.$2),
+                ['Bearer old-access', 'Bearer refreshed-access']);
+            expect(starts.first.$3, isNotNull);
+            expect(starts.last.$3, starts.first.$3,
+                reason:
+                    'Refreshing credentials must not create a second offer');
+            expect(starts.last.$4, starts.first.$4);
+            expect(starts.last.$4['approval_key'], publicKey);
+            expect(offersByKey, hasLength(1));
+            expect(offer.id, id);
+            expect(offer.qrPayload, payload);
+            expect(offer.expiresAt, DateTime.parse(deadline));
+            expect(oldStore.values.containsValue(starts.last.$3), isFalse,
+                reason: 'A successful start clears the pending key');
             await expectLater(target.redeemDeviceTransfer(offer.qrPayload),
                 throwsA(failure('guest_exists_on_target')));
             occupied = false;
@@ -215,10 +253,6 @@ void main() {
             expect((await target.claimDeviceTransfer(receipt)).accountId,
                 account['id']);
             expect((await target.cached())?.accountId, account['id']);
-            final starts =
-                calls.where((call) => call.$1.endsWith('/start')).single;
-            expect(starts.$2, 'Bearer old-access');
-            expect(starts.$4['approval_key'], publicKey);
             final confirms =
                 calls.where((call) => call.$1.endsWith('/confirm')).toList();
             expect(confirms[0].$3, confirms[1].$3);
