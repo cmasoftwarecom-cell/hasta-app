@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import '../domain/gmail_recovery.dart';
 import '../domain/guest_session.dart';
 import 'profile_cache.dart';
 
@@ -160,7 +161,10 @@ class GuestRepository implements GuestSession {
       await _save(slot, null);
       return value;
     } on AuthFailure catch (error) {
-      if (!error.offline && error.status != null && error.status! < 500) {
+      if (!error.offline &&
+          error.status != null &&
+          error.status! < 500 &&
+          error.code != 'request_in_progress') {
         await _save(slot, null);
       }
       rethrow;
@@ -224,6 +228,93 @@ class GuestRepository implements GuestSession {
       if (error.status == 401) await _save('device', null);
       rethrow;
     }
+  }
+
+  Future<GmailRecoveryConsent> beginGmailRecovery(Uri trustedRedirect) async {
+    if (trustedRedirect.scheme != 'https' ||
+        trustedRedirect.host.isEmpty ||
+        trustedRedirect.userInfo.isNotEmpty ||
+        trustedRedirect.hasQuery ||
+        trustedRedirect.hasFragment) {
+      throw const AuthFailure('configuration');
+    }
+    final proof = await _proof();
+    final device = await _deviceToken(proof);
+    return _write('auth/recover:start', {
+      'provider': 'google',
+      'device_token': device,
+      'device_proof': proof,
+    }, (reply) async {
+      final rawUrl = reply['auth_url'];
+      final state = reply['state'];
+      final nonce = reply['nonce'];
+      final ttl = reply['expires_in'];
+      final consent = rawUrl is String ? Uri.tryParse(rawUrl) : null;
+      final challenge = RegExp(r'^[A-Za-z0-9_-]{43}$');
+      if (consent == null ||
+          consent.scheme != 'https' ||
+          consent.host != 'accounts.google.com' ||
+          consent.port != 443 ||
+          consent.userInfo.isNotEmpty ||
+          consent.path != '/o/oauth2/v2/auth' ||
+          consent.hasFragment ||
+          state is! String ||
+          !challenge.hasMatch(state) ||
+          nonce is! String ||
+          !challenge.hasMatch(nonce) ||
+          ttl is! int ||
+          ttl != 300) {
+        throw const AuthFailure('recovery_consent_invalid');
+      }
+      final parameters = consent.queryParametersAll;
+      bool matches(String name, String value) {
+        final entries = parameters[name];
+        return entries != null &&
+            entries.length == 1 &&
+            entries.single == value;
+      }
+
+      if (!matches('redirect_uri', trustedRedirect.toString()) ||
+          !matches('response_type', 'code') ||
+          !matches('code_challenge_method', 'S256') ||
+          !matches('state', state) ||
+          !matches('nonce', nonce)) {
+        throw const AuthFailure('recovery_consent_invalid');
+      }
+      return GmailRecoveryConsent(
+          consentUrl: consent,
+          redirectUri: trustedRedirect,
+          state: state,
+          expiresAt: DateTime.now().add(Duration(seconds: ttl)));
+    });
+  }
+
+  Future<GuestProfile> finishGmailRecovery(
+      GmailRecoveryConsent consent, Uri browserCallback) async {
+    final code = consent.acceptCallback(browserCallback);
+    final proof = await _proof();
+    final device = await _deviceToken(proof);
+    return _write('auth/recover:complete', {
+      'device_token': device,
+      'device_proof': proof,
+      'state': consent.state,
+      'code': code,
+    }, (reply) {
+      final account = reply['account'];
+      final access = reply['access_token'];
+      final refresh = reply['refresh_token'];
+      if (reply['is_new_account'] != false ||
+          account is! Document ||
+          account['id'] is! String ||
+          account['is_guest'] != false ||
+          access is! String ||
+          access.isEmpty ||
+          refresh is! String ||
+          refresh.isEmpty) {
+        throw const AuthFailure('recovery_reply_invalid');
+      }
+      return _remember(reply, device);
+    });
   }
 
   @override

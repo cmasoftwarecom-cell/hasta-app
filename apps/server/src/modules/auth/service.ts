@@ -177,6 +177,38 @@ export class GuestAuth {
     return actor;
   }
 
+  async provedRecoveryDevice(tx: Tx, credentials: { device_token: string; device_proof: string }) {
+    const device = deviceClaims(credentials.device_token);
+    await lock(tx, `device:${device.hash}`);
+    // Never let a synthetic QA enrollment become a real recovery destination.
+    const enrollment = await tx.device_enrollments.findUnique({ where: { device_hash: device.hash } });
+    if (!enrollment || enrollment.qa_only || enrollment.platform !== device.platform ||
+        !sameDigest(enrollment.proof_hash, sha(credentials.device_proof))) throw denied();
+    return device;
+  }
+
+  // The caller holds the proved target-device and verified account locks.
+  async restoreOnDevice(tx: Tx, account: accounts, device: Device) {
+    const target = await binding(tx, device.hash);
+    if (target && target.account_id !== account.id) {
+      return { error: { status: 409, code: target.account.is_guest ? 'guest_exists_on_target' : 'account_exists_on_target' } };
+    }
+    const now = new Date();
+    const revoked = await revoke(tx, { account_id: account.id, device_hash: { not: device.hash } }, 'device_recovery');
+    await revoke(tx, { account_id: account.id, device_hash: device.hash }, 'device_recovery');
+    await tx.device_bindings.updateMany({ where: { account_id: account.id, revoked_at: null,
+      device_hash: { not: device.hash } }, data: { revoked_at: now } });
+    const installed = await tx.device_bindings.upsert({
+      where: { account_id_device_hash: { account_id: account.id, device_hash: device.hash } },
+      create: { id: uuid7(), account_id: account.id, device_hash: device.hash, platform: device.platform },
+      update: { role: 'primary', bound_at: now, revoked_at: null },
+    });
+    const { id, role, device_hash, bound_at } = installed;
+    return { reply: { ...await this.session(tx, account.id, device.hash), account: accountView(account),
+      device_binding: { id, role, device_hash, bound_at }, is_new_account: false,
+      revoked_other_sessions: revoked.count } };
+  }
+
   async listSessions(bearer: string) {
     const actor = access(bearer);
     return this.db.$transaction(async (tx) => {

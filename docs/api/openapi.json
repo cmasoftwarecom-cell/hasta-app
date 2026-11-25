@@ -78,12 +78,7 @@
       "post": {
         "tags": ["Auth"], "operationId": "completeGoogleLink", "description": "Consumes state once and exchanges the authorization code server-side. Never creates or merges accounts.",
         "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
-        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "additionalProperties": false,
-          "required": ["device_token", "device_proof", "state", "code"], "properties": {
-            "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" },
-            "state": { "$ref": "#/components/schemas/OauthChallenge" }, "code": { "type": "string", "minLength": 1, "maxLength": 2048, "writeOnly": true }
-          }
-        } } } },
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConsentCompletion" } } } },
         "responses": {
           "200": { "description": "Linked identity and account capabilities.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": {
             "type": "object", "required": ["identity", "account", "unlocked"], "properties": {
@@ -110,6 +105,48 @@
           "204": { "description": "No Google identity remains.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } } },
           "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
           "409": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/recover:start": {
+      "post": {
+        "tags": ["Auth"], "operationId": "startGmailRecovery", "description": "Starts consent to recover an existing Gmail-linked account onto a proved installation. Does not create an account.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["provider", "device_token", "device_proof"],
+          "properties": { "provider": { "type": "string", "enum": ["google"] }, "device_token": { "type": "string", "writeOnly": true },
+            "device_proof": { "$ref": "#/components/schemas/Proof" } }
+        } } } },
+        "responses": {
+          "200": { "description": "Recovery consent for the proved installation.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["state", "nonce", "auth_url", "expires_in"],
+              "properties": { "state": { "$ref": "#/components/schemas/OauthChallenge" }, "nonce": { "$ref": "#/components/schemas/OauthChallenge" },
+                "auth_url": { "type": "string", "format": "uri" }, "expires_in": { "type": "integer", "enum": [300] } }
+            } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/recover:complete": {
+      "post": {
+        "tags": ["Auth"], "operationId": "completeGmailRecovery", "description": "Exchanges the one-time code server-side and restores only the account with the previously verified Gmail subject. Retires old bindings and never merges accounts.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConsentCompletion" } } } },
+        "responses": {
+          "200": { "description": "Existing account restored on the proved installation.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "allOf": [
+              { "$ref": "#/components/schemas/Entry" },
+              { "type": "object", "required": ["revoked_other_sessions"], "properties": {
+                "is_new_account": { "type": "boolean", "enum": [false] },
+                "revoked_other_sessions": { "type": "integer", "minimum": 0 }
+              } }
+            ] } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
         }
       }
     },
@@ -208,6 +245,12 @@
       "LinkDevice": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof"], "properties": {
         "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }
       } },
+      "ConsentCompletion": { "type": "object", "additionalProperties": false,
+        "required": ["device_token", "device_proof", "state", "code"], "properties": {
+          "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+          "state": { "$ref": "#/components/schemas/OauthChallenge" }, "code": { "type": "string", "minLength": 1, "maxLength": 2048, "writeOnly": true }
+        }
+      },
       "LinkedGoogle": { "type": "object", "required": ["provider", "email_masked", "linked_at"], "properties": {
         "provider": { "type": "string", "enum": ["google"] }, "email_masked": { "type": "string" }, "linked_at": { "type": "string", "format": "date-time" }
       } },

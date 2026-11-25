@@ -10,8 +10,8 @@
 - updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
 
 ## Position
-- current sprint: `S2 — Gmail linking and device change` (backend link/unlink guard and sessions API implemented; sprint remains open)
-- blocked by: completion and local QA of lost-device recovery, secure QR transfer, mobile Linked Accounts and Security/Devices flows, and the SPEC §17.2 friend-system scope. Keep Google linking disabled and do not start S3 or Premium.
+- current sprint: `S2 — Gmail linking and device change` (backend link/unlink guard, sessions API, and lost-device recovery API plus Flutter repository implemented; sprint remains open)
+- blocked by: native recovery callback/entry and end-to-end recovery QA, secure QR transfer, mobile Linked Accounts and Security/Devices flows, and the SPEC §17.2 friend-system scope. Keep Gmail linking and recovery disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
 - open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), existing draft, S1 plus partial S2 (`feature/HAS-1a-guest-auth`)
@@ -39,6 +39,8 @@ P0-T40-T41-IOS-NATIVE-FAIL: the [failed run](https://github.com/cmasoftwarecom-c
 
 S1 verification update: [CI for `4d4220c`](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45602004923) passed, including [hosted T40/T41 XCTest](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45602004923/job/139163019376) and its isolated PostgreSQL assertions. This clears the previous simulator prerequisite, not signed distribution or physical-device QA. `T25–T30`, `T43–T44` remain open for S2. No local QA APK has been produced.
 
+S2 recovery: T30 backend and Flutter repository tests cover returning the same account on a proved fresh installation, retiring old credentials and bindings, rejecting an unlinked subject even when its email matches, and preserving retry scope. T37/T39 also exercise code-only recovery with locally signed Google proofs. T30 native reinstall/browser callback and full mobile QA remain open; no native entry, HTTPS app-link association, or live OAuth flow was tested.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -53,6 +55,7 @@ S1 verification update: [CI for `4d4220c`](https://github.com/cmasoftwarecom-cel
 | T47 frozen S1 contract until a previous release tag exists | proposed in PR #2 | [ADR-0010](../decisions/adr/ADR-0010-openapi-bootstrap-baseline.md) |
 | Primary-button semantic fills and canonical DS 1.0.1 source | proposed in PR #2 | [ADR-0011](../decisions/adr/ADR-0011-primary-button-token-source.md) |
 | S2 code-only Google consent, device proof, encrypted short-lived intent, rollout hold | proposed in PR #2 | [ADR-0012](../decisions/adr/ADR-0012-s2-google-link-boundary.md) |
+| S2 lost-device recovery and inactive historical bindings, with a proved target installation | proposed in PR #2 | [ADR-0013](../decisions/adr/ADR-0013-s2-lost-device-recovery.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
