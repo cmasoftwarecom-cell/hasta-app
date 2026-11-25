@@ -36,11 +36,11 @@ Standard codes: `unauthenticated` · `forbidden` · `not_found` · `validation_f
 ## 1. Auth & Identity
 
 ### 1.1 `POST /v1/auth/device/register` — public
-Registers the device and returns the hash. The raw id crosses the wire once, over TLS, and is **never persisted**.
+Registers the device and returns the hash. The raw ID is sent only for enrollment or re-registration, over TLS, and is **never persisted**. Before the first request, the app generates a 32-byte random installation proof, stores it in OS secure storage, and sends it as 64 lowercase hexadecimal characters. The server keeps only its SHA-256 digest. Re-registration must prove the same enrollment; a device identifier by itself cannot recover a guest account. See ADR-0009.
 
 Request
 ```json
-{ "raw_device_id": "android-id-or-idfv", "platform": "android", "app_version": "1.0.0", "os_version": "14" }
+{ "raw_device_id": "android-id-or-idfv", "platform": "android", "app_version": "1.0.0", "os_version": "14", "device_proof": "<64 lowercase hex characters>" }
 ```
 Response `200`
 ```json
@@ -52,7 +52,7 @@ Creates or resumes the guest account for this device.
 
 Request
 ```json
-{ "device_token": "dt_…", "locale": "my" }
+{ "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>", "locale": "my" }
 ```
 Response `200`
 ```json
@@ -63,13 +63,13 @@ Response `200`
   "is_new_account": true
 }
 ```
-Errors: `429 device_cooldown` (`details.retry_after_days`), `403 validation_failed`, `429 rate_limited`.
+Errors: `400 validation_failed`, `401 unauthenticated` (includes invalid proof), `409 idempotency_conflict`, `429 device_cooldown` (`details.retry_after_days`), `429 rate_limited`. Auth write replays require proof first. A saved session reply is returned only while its access token, session and binding are valid and the account is active; otherwise the replay returns `401` without credentials. Expired replay rows are rejected on lookup and swept independently of traffic.
 
 ### 1.3 `POST /v1/auth/refresh` — public
-Request `{ "refresh_token": "rt_…", "device_token": "dt_…" }` → `200` new pair (old refresh invalidated). Reuse of a rotated token ⇒ `401 unauthenticated` and the whole token family is revoked.
+Request `{ "refresh_token": "rt_…", "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>" }` → `200` new pair (old refresh invalidated). Retrying the original request key can return the same still-active replacement. Reuse outside that retry, or use with a different proven binding, returns `401 unauthenticated` and revokes the whole token family.
 
 ### 1.4 `POST /v1/auth/logout` — auth
-`{ "device_token": "dt_…", "everywhere": false }` → `204`.
+`{ "device_token": "dt_…", "device_proof": "<64 lowercase hex characters>", "everywhere": false }` → `204`. Same-key replay while the original access token remains signed and unexpired returns empty `204` with `Idempotent-Replayed: true`; it never creates a session.
 
 ### 1.5 `GET /v1/me` — auth
 ```json
@@ -99,20 +99,28 @@ Errors: `409 identity_in_use`, `422 google_email_unverified`, `401 token_expired
 
 ### 1.7 Recovery (old device lost)
 
-`POST /v1/auth/recover:start` — public → `{ "state":"…","nonce":"…","auth_url":"…" }` (Google only in v1)
-`POST /v1/auth/recover:complete` — public → same shape as guest response, plus `"revoked_other_sessions": 3`. If no account matches the identity ⇒ `404 not_found` with copy guiding to guest creation.
+Both writes require `Idempotency-Key` and existing device enrollment (`device_token`, `device_proof`), not an account bearer. No provider sign-in or account creation is offered by these routes.
+
+`POST /v1/auth/recover:start` — `{ "provider":"google", "device_token":"…", "device_proof":"…" }` → `{ "state":"…","nonce":"…","auth_url":"…","expires_in":300 }`.
+
+`POST /v1/auth/recover:complete` — `{ "state":"…", "code":"…", "device_token":"…", "device_proof":"…" }` → same shape as guest response, plus `"revoked_other_sessions": 3` and `is_new_account: false`. State is bound to the enrolled installation and consumed before server-side code exchange. Old sessions and bindings are retired when recovery succeeds. A new installation occupied by a different account is never overwritten.
+
+Errors: `404 not_found` if no active, verified linked account matches (copy guides to guest creation); `401 token_expired` for missing, expired, or consumed state; `409 guest_exists_on_target` / `account_exists_on_target` for occupied installations; `422 google_email_unverified` for a valid Google proof without verified email.
 
 ### 1.8 QR device transfer
 
 | Endpoint | Auth | Body | Result |
 | --- | --- | --- | --- |
-| `POST /v1/auth/transfer/start` | auth (old device) | `{}` | `200 { "transfer_id":"…", "qr_payload":"{\"v\":1,\"token\":\"tt_…\"}", "expires_at":"…(+120s)" }` — rate limit 2 / 3 min |
-| `POST /v1/auth/transfer/redeem` | auth (new device) | `{ "token":"tt_…", "device_token":"dt_…" }` | `200 { "status":"awaiting_confirmation", "expires_at":"…" }` |
-| `POST /v1/auth/transfer/confirm` | auth (old device) | `{ "transfer_id":"…", "biometric_verified": true }` | `200 { "status":"confirmed", "new_device_bound_at":"…", "revoked_sessions": 4 }` |
-| `POST /v1/auth/transfer/reject` | auth (old device) | `{ "transfer_id":"…" }` | `200 { "status":"rejected" }` |
-| `GET /v1/auth/transfer/:id` | auth | — | `200 { "status":"pending|awaiting_confirmation|confirmed|rejected|expired" }` |
+| `POST /v1/auth/transfer/start` | source bearer + enrollment | `{ "approval_key":"…" }` | `200 { "transfer_id":"…", "qr_payload":"{\"v\":1,\"token\":\"tt_…\"}", "expires_at":"…(+120s)" }` · rate limit two starts per three minutes per account and installation |
+| `POST /v1/auth/transfer/redeem` | target enrollment only | `{ "token":"tt_…" }` | `200 { "transfer_id":"…", "status":"awaiting_confirmation", "expires_at":"…", "match_code":"…" }`; the QR token is now consumed |
+| `POST /v1/auth/transfer/confirm` | source bearer + enrollment | `{ "transfer_id":"…", "approval_signature":"…" }` | `200 { "status":"confirmed", "new_device_bound_at":"…", "revoked_sessions":4 }` |
+| `POST /v1/auth/transfer/reject` | source bearer + enrollment | `{ "transfer_id":"…" }` | `200 { "status":"rejected" }` |
+| `POST /v1/auth/transfer/claim` | same target enrollment | `{ "transfer_id":"…" }` | `200` guest-entry-shaped response for the existing account with `is_new_account:false`; never creates or merges accounts |
+| `GET /v1/auth/transfer/:id` | active source bearer | none | `200 { "status":"pending|awaiting_confirmation|confirmed|rejected|expired", "expires_at":"…" }`; `approval_challenge` and `match_code` are returned only while awaiting approval |
 
-Errors: `410 token_expired`, `409 token_used`, `409 guest_exists_on_target`, `403 biometric_required`.
+Every write adds `device_token` and `device_proof` to the body and requires `Idempotency-Key`. The source pins a base64url P-256 SPKI DER public key on start. On confirm, it supplies a base64url DER ECDSA/SHA-256 signature of the ASCII approval challenge obtained after the scan. Both devices must display the same `match_code` before approval. A client-supplied boolean is not accepted. Neither the QR payload nor the signature belongs in logs, clipboard, deep links, or device persistence.
+
+Errors include `410 token_expired`, `409 token_used`, `409 guest_exists_on_target` / `account_exists_on_target`, `409 request_in_progress`, and `403 biometric_required`. A same-key retry is scoped to the proved installation and cannot redeem a QR for a second installation or return revoked credentials. The original 120-second deadline is not extended by scanning. Outside the explicit loopback QA launcher in test mode with the isolated `hasta_test` database and the QR flag enabled, well-formed transfer calls return `404 not_found`; the flag cannot enable the feature on a regular server. See [ADR-0015](../decisions/adr/ADR-0015-s2-qr-transfer.md) for polling, the approval trust boundary, and the release prerequisites.
 
 ### 1.9 Sessions & devices
 `GET /v1/auth/sessions` → list `{id, device_hash_short, platform, created_at, last_seen_at, current}`.
@@ -123,6 +131,12 @@ Errors: `410 token_expired`, `409 token_used`, `409 guest_exists_on_target`, `40
 `DELETE /v1/account` — auth, online only, requires `Confirm-Deletion: <typed phrase hash>` → `202 { "status":"deleted", "purge_at":"…(+30d)", "cooldown_until":"…(+30d)", "store_subscription_notice_key":"billing.cancelInStore", "drive_backup_action":"deleted|user_action_required" }`
 
 ---
+
+### 1.11 Internal QA guest fixtures (S1 only)
+
+`POST /v1/qa/guest` uses `Idempotency-Key` and accepts `{device_token, device_proof, handle, reset}`. With a valid non-QA enrollment it opens the named device-scoped test fixture; `reset: true` deletes and recreates only that fixture. The `200` response is the guest response plus a fixture-specific `device_token`. The six handles are `tester.a`, `tester.b`, `tester.social`, `tester.premium`, `tester.minor`, and `tester.fresh`. These are S1 guest profiles only; later-sprint entities and entitlements are not seeded.
+
+The route returns `404` unless both the environment is `dev`, `test`, or `beta` and `HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true`. Keep QA environments and their database and signing keys separate. The mobile panel is never compiled into release builds.
 
 ## 2. Social
 

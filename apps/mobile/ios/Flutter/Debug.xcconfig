@@ -1,1 +1,4 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
 #include "Generated.xcconfig"
+HASTA_RECOVERY_LINK_HOST = recovery.example.invalid
+#include? "RecoveryHost.xcconfig"

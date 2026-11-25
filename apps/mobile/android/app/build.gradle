@@ -24,13 +24,26 @@ android {
         applicationId = "app.hasta.mobile"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // EncryptedSharedPreferences uses an Android Keystore key (API 23+).
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        def recoveryHost = System.getenv("HASTA_RECOVERY_LINK_HOST") ?: "recovery.example.invalid"
+        if (!(recoveryHost ==~ /(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?/) || recoveryHost.length() > 253) {
+            throw new GradleException("Invalid HASTA_RECOVERY_LINK_HOST")
+        }
+        manifestPlaceholders["hastaRecoveryHost"] = recoveryHost
     }
 
     // Release signing is not configured in S0. Never sign release with debug keys.
+    sourceSets.configureEach {
+        if (name == "release" || name == "profile") java.srcDir "src/withoutTransfer/kotlin"
+    }
+}
+
+dependencies {
+    debugImplementation "com.journeyapps:zxing-android-embedded:4.3.0"
 }
 
 flutter {

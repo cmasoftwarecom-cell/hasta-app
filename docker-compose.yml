@@ -23,6 +23,7 @@ services:
       retries: 10
   server:
     build: ./apps/server
+    env_file: .env
     environment:
       HASTA_ENV: dev
       HASTA_DATABASE_URL: postgresql://hasta:${HASTA_POSTGRES_PASSWORD}@postgres:5432/hasta

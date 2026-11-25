@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { checkIdentityGate } from './identity-gate.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
@@ -25,16 +27,17 @@ const gates = {
     assert.doesNotMatch(server, /\b(?:otp[a-z_-]*|sms(?:[-_]?provider|\b)|twilio|vonage)\b/i);
   },
   T36: () => {
-    // Fail closed until S1 adds a release-artifact exclusion test for its test panel.
-    for (const path of mobile) {
-      assert.doesNotMatch(read(path), /QUICK_TEST_ACCOUNTS|quick[\s_-]*test[\s_-]*accounts?|QuickTestPanel/i, path);
-    }
+    const panel = read('apps/mobile/lib/features/auth/presentation/guest_screen.dart');
+    assert.match(panel, /const _qa = !kReleaseMode\s*&&/);
+    assert.match(panel, /bool.fromEnvironment\('HASTA_QUICK_TEST_ACCOUNTS_ENABLED'\)/);
+    assert.match(panel, /if \(_qa\)\s*Listener/);
   },
-  T37: () => {
-    assert.doesNotMatch(server, /(?:\bsign[-_ ]?in\b|(?:google|apple)[^/\n]{0,50}\blog[-_ ]?in\b)/i);
-    // Fail closed on token inputs until S2 ships issuer/audience/expiry/nonce/email verification tests.
-    assert.doesNotMatch(server, /\bid[-_]?token\b/i);
-  },
+  T37: () => checkIdentityGate({
+    apiPaths: api.paths,
+    apiSchemas: api.components?.schemas,
+    sources: sources.map((path) => ({ path, text: read(path) })),
+    verification: createRequire(import.meta.url)('../../apps/server/test/google-proof-fixture.cjs').liveVerification(),
+  }),
   T45: () => {
     // Legacy handoff/reference docs are not application source or packaged artifacts.
     const files = [...list('apps'), ...list('infra'), ...list('tools'), ...list('docs/api'),
@@ -69,7 +72,7 @@ const gates = {
 };
 for (const [id, check] of Object.entries(gates)) {
   try {
-    check();
+    await check();
     console.log(`${id}: PASS`);
   } catch (error) {
     console.error(`${id}: FAIL: ${error.message}`);

@@ -1,0 +1,4 @@
+<resources>
+    <string name="hasta_transfer_receive">Receive Hasta account</string>
+    <string name="hasta_transfer_scan">Scan the QR shown on your old device</string>
+</resources>

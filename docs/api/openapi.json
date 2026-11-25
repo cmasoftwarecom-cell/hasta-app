@@ -1,10 +1,422 @@
 {
   "openapi": "3.0.3",
-  "info": {
-    "title": "Hasta API",
-    "version": "1.0.0",
-    "description": "Client API baseline. S0 exposes no client operations."
-  },
+  "info": { "title": "Hasta API", "version": "1.0.0", "description": "Guest-first identity API. Use TLS and never log enrollment proof or tokens." },
   "servers": [{ "url": "/v1" }],
-  "paths": {}
+  "tags": [{ "name": "Auth", "description": "Guest accounts and device sessions" }],
+  "paths": {
+    "/auth/device/register": {
+      "post": {
+        "tags": ["Auth"], "operationId": "registerDevice", "description": "Enrolls a device or renews its credential using the original enrollment proof.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Registration" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Registered" }, "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Throttled" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/guest": {
+      "post": {
+        "tags": ["Auth"], "operationId": "enterGuest", "description": "Creates or resumes the account for the proved enrollment.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GuestEntry" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Entered" }, "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "429": { "$ref": "#/components/responses/Throttled" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"], "operationId": "rotateRefresh", "description": "Rotates the refresh token for its enrolled device. A revoked session is never replayed.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Refresh" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Refreshed" }, "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"], "operationId": "revokeSession", "description": "Revokes device sessions, or all sessions for the scoped account.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Logout" } } } },
+        "responses": {
+          "204": { "description": "Sessions revoked.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/identities/google/link:start": {
+      "post": {
+        "tags": ["Auth"], "operationId": "startGoogleLink", "description": "Starts short-lived Google consent for the authenticated, proved installation.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LinkDevice" } } } },
+        "responses": {
+          "200": { "description": "Consent URL and single-use state.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": {
+            "type": "object", "required": ["state", "nonce", "scopes", "auth_url", "expires_in"], "properties": {
+              "state": { "$ref": "#/components/schemas/OauthChallenge" }, "nonce": { "$ref": "#/components/schemas/OauthChallenge" },
+              "scopes": { "type": "array", "items": { "type": "string", "enum": ["openid", "email", "profile"] } },
+              "auth_url": { "type": "string", "format": "uri" }, "expires_in": { "type": "integer", "enum": [300] }
+            }
+          } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/identities/google/link:complete": {
+      "post": {
+        "tags": ["Auth"], "operationId": "completeGoogleLink", "description": "Consumes state once and exchanges the authorization code server-side. Never creates or merges accounts.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConsentCompletion" } } } },
+        "responses": {
+          "200": { "description": "Linked identity and account capabilities.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": {
+            "type": "object", "required": ["identity", "account", "unlocked"], "properties": {
+              "identity": { "$ref": "#/components/schemas/LinkedGoogle" },
+              "account": { "type": "object", "required": ["id", "is_guest"], "properties": { "id": { "$ref": "#/components/schemas/Id" }, "is_guest": { "type": "boolean", "enum": [false] } } },
+              "unlocked": { "type": "array", "items": { "type": "string", "enum": ["premium_purchase", "restore_purchases", "device_recovery"] } }
+            }
+          } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/identities/google": {
+      "delete": {
+        "tags": ["Auth"], "operationId": "unlinkGoogle", "description": "Returns a conflict if removing Google would leave no lost-device recovery method.",
+        "security": [{ "Bearer": [] }], "parameters": [
+          { "$ref": "#/components/parameters/WriteKey" },
+          { "$ref": "#/components/parameters/DeviceToken" }, { "$ref": "#/components/parameters/DeviceProof" }
+        ],
+        "responses": {
+          "204": { "description": "No Google identity remains.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/recover:start": {
+      "post": {
+        "tags": ["Auth"], "operationId": "startGmailRecovery", "description": "Starts consent to recover an existing Gmail-linked account onto a proved installation. Does not create an account.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["provider", "device_token", "device_proof"],
+          "properties": { "provider": { "type": "string", "enum": ["google"] }, "device_token": { "type": "string", "writeOnly": true },
+            "device_proof": { "$ref": "#/components/schemas/Proof" } }
+        } } } },
+        "responses": {
+          "200": { "description": "Recovery consent for the proved installation.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["state", "nonce", "auth_url", "expires_in"],
+              "properties": { "state": { "$ref": "#/components/schemas/OauthChallenge" }, "nonce": { "$ref": "#/components/schemas/OauthChallenge" },
+                "auth_url": { "type": "string", "format": "uri" }, "expires_in": { "type": "integer", "enum": [300] } }
+            } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "503": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/recover:complete": {
+      "post": {
+        "tags": ["Auth"], "operationId": "completeGmailRecovery", "description": "Exchanges the one-time code server-side and restores only the account with the previously verified Gmail subject. Retires old bindings and never merges accounts.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConsentCompletion" } } } },
+        "responses": {
+          "200": { "description": "Existing account restored on the proved installation.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "allOf": [
+              { "$ref": "#/components/schemas/Entry" },
+              { "type": "object", "required": ["revoked_other_sessions"], "properties": {
+                "is_new_account": { "type": "boolean", "enum": [false] },
+                "revoked_other_sessions": { "type": "integer", "minimum": 0 }
+              } }
+            ] } } } },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "422": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/start": {
+      "post": {
+        "tags": ["Auth"], "operationId": "startDeviceTransfer", "description": "Starts a 120-second QR transfer from the proved source device; limited to two starts per three minutes per account and installation.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "approval_key"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "approval_key": { "type": "string", "pattern": "^[A-Za-z0-9_-]{122}$", "description": "Base64url P-256 SPKI DER public key." } }
+        } } } },
+        "responses": {
+          "200": { "description": "Source-only QR payload; it must never be logged or stored by clients.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["transfer_id", "qr_payload", "expires_at"],
+              "properties": { "transfer_id": { "$ref": "#/components/schemas/Id" }, "qr_payload": { "type": "string", "description": "Serialized v1 QR JSON with one tt_ token." },
+                "expires_at": { "type": "string", "format": "date-time" } }
+            } } } },
+          "429": { "$ref": "#/components/responses/Throttled" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/redeem": {
+      "post": {
+        "tags": ["Auth"], "operationId": "redeemDeviceTransfer", "description": "The proved, unbound replacement installation consumes the QR token and waits for the source to approve. No credentials are returned.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "token"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "token": { "type": "string", "writeOnly": true, "pattern": "^tt_[A-Za-z0-9_-]{43}$" } }
+        } } } },
+        "responses": {
+          "200": { "description": "QR consumed by the replacement installation.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["transfer_id", "status", "expires_at", "match_code"],
+              "properties": { "transfer_id": { "$ref": "#/components/schemas/Id" }, "status": { "type": "string", "enum": ["awaiting_confirmation"] },
+                "expires_at": { "type": "string", "format": "date-time" }, "match_code": { "$ref": "#/components/schemas/TransferMatchCode" } }
+            } } } },
+          "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/confirm": {
+      "post": {
+        "tags": ["Auth"], "operationId": "confirmDeviceTransfer", "description": "Atomically moves the binding and revokes the source sessions after the proved source submits a signature over the scanned transfer's approval challenge.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": {
+          "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "transfer_id", "approval_signature"],
+          "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+            "transfer_id": { "$ref": "#/components/schemas/Id" },
+            "approval_signature": { "type": "string", "writeOnly": true, "pattern": "^[A-Za-z0-9_-]{11,96}$", "description": "Base64url DER ECDSA SHA-256 signature over the ASCII approval challenge." } }
+        } } } },
+        "responses": {
+          "200": { "description": "Transfer committed and old-device sessions revoked.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status", "new_device_bound_at", "revoked_sessions"],
+              "properties": { "status": { "type": "string", "enum": ["confirmed"] }, "new_device_bound_at": { "type": "string", "format": "date-time" },
+                "revoked_sessions": { "type": "integer", "minimum": 0 } }
+            } } } },
+          "403": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/reject": {
+      "post": {
+        "tags": ["Auth"], "operationId": "rejectDeviceTransfer", "description": "The proved source cancels a pending transfer without moving the account.",
+        "security": [{ "Bearer": [] }], "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransferReference" } } } },
+        "responses": {
+          "200": { "description": "Transfer rejected.",
+            "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } },
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status"],
+              "properties": { "status": { "type": "string", "enum": ["rejected"] } } } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/claim": {
+      "post": {
+        "tags": ["Auth"], "operationId": "claimDeviceTransfer", "description": "Issues a session only to the replacement installation recorded at redeem, after the source approves and before the transfer deadline.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TransferReference" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/Entered" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" }, "410": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/transfer/{id}": {
+      "get": {
+        "tags": ["Auth"], "operationId": "getDeviceTransferStatus", "description": "Only the active source session can read the status and, after scan, the target-bound approval challenge.",
+        "security": [{ "Bearer": [] }],
+        "parameters": [{ "in": "path", "name": "id", "required": true, "schema": { "$ref": "#/components/schemas/Id" } }],
+        "responses": {
+          "200": { "description": "Transfer status and deadline.",
+            "content": { "application/json": { "schema": { "type": "object", "required": ["status", "expires_at"],
+              "properties": { "status": { "type": "string", "enum": ["pending", "awaiting_confirmation", "confirmed", "rejected", "expired"] },
+                "expires_at": { "type": "string", "format": "date-time" },
+                "approval_challenge": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+                "match_code": { "$ref": "#/components/schemas/TransferMatchCode" } }
+            } } } },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/sessions": {
+      "get": {
+        "tags": ["Auth"], "operationId": "listSessions", "description": "Lists active sessions for the current account without exposing a full device hash.",
+        "security": [{ "Bearer": [] }],
+        "responses": {
+          "200": { "description": "Active account sessions.", "content": { "application/json": { "schema": {
+            "type": "array", "items": { "$ref": "#/components/schemas/SessionSummary" }
+          } } } },
+          "401": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      },
+      "delete": {
+        "tags": ["Auth"], "operationId": "signOutOtherDevices", "description": "Revokes sessions on all other devices for an account with verified Gmail.",
+        "security": [{ "Bearer": [] }], "parameters": [
+          { "$ref": "#/components/parameters/WriteKey" }, { "$ref": "#/components/parameters/DeviceToken" },
+          { "$ref": "#/components/parameters/DeviceProof" },
+          { "name": "others", "in": "query", "required": true, "schema": { "type": "boolean", "enum": [true] } }
+        ],
+        "responses": {
+          "204": { "$ref": "#/components/responses/SessionRevoked" },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/auth/sessions/{id}": {
+      "delete": {
+        "tags": ["Auth"], "operationId": "revokeSessionById", "description": "Revokes the target session's refresh family for the current account.",
+        "security": [{ "Bearer": [] }], "parameters": [
+          { "$ref": "#/components/parameters/WriteKey" }, { "$ref": "#/components/parameters/DeviceToken" },
+          { "$ref": "#/components/parameters/DeviceProof" },
+          { "name": "id", "in": "path", "required": true, "schema": { "$ref": "#/components/schemas/Id" } }
+        ],
+        "responses": {
+          "204": { "$ref": "#/components/responses/SessionRevoked" },
+          "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" },
+          "404": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": ["Auth"], "operationId": "currentAccount", "description": "Returns the current account, profile, and server capability flags.",
+        "security": [{ "Bearer": [] }],
+        "responses": {
+          "200": { "description": "Current account view.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Me" } } } },
+          "401": { "$ref": "#/components/responses/Error" }, "503": { "$ref": "#/components/responses/Error" },
+          "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    },
+    "/qa/guest": {
+      "post": {
+        "tags": ["Auth"], "operationId": "enterQaFixture", "x-internal": true,
+        "description": "Creates, enters, or resets an isolated device fixture. Disabled outside explicitly enabled dev, test, or beta environments.",
+        "parameters": [{ "$ref": "#/components/parameters/WriteKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QaEntry" } } } },
+        "responses": {
+          "200": { "$ref": "#/components/responses/QaEntered" }, "400": { "$ref": "#/components/responses/Error" },
+          "401": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" },
+          "409": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Throttled" },
+          "503": { "$ref": "#/components/responses/Error" }, "default": { "$ref": "#/components/responses/Error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": { "Bearer": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" } },
+    "parameters": {
+      "WriteKey": { "name": "Idempotency-Key", "in": "header", "required": true, "description": "UUIDv7, reused only for an identical write in the same enrollment scope.", "schema": { "$ref": "#/components/schemas/Id" } },
+      "DeviceToken": { "name": "Device-Token", "in": "header", "required": true, "schema": { "type": "string", "writeOnly": true } },
+      "DeviceProof": { "name": "Device-Proof", "in": "header", "required": true, "schema": { "$ref": "#/components/schemas/Proof" } }
+    },
+    "headers": {
+      "RequestId": { "description": "Request correlation ID.", "schema": { "$ref": "#/components/schemas/Id" } },
+      "Replayed": { "description": "Present with value true when a valid saved response is replayed.", "schema": { "type": "boolean", "enum": [true] } },
+      "Retry": { "description": "Whole seconds before retrying.", "schema": { "type": "integer", "minimum": 1 } }
+    },
+    "responses": {
+      "Registered": { "description": "Enrollment credential.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegistrationResult" } } } },
+      "Entered": { "description": "Guest session and binding.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Entry" } } } },
+      "QaEntered": { "description": "Isolated QA session and credential.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Entry" }, { "type": "object", "required": ["device_token"], "properties": { "device_token": { "type": "string" } } }] } } } },
+      "Refreshed": { "description": "New access and refresh token pair.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Tokens" } } } },
+      "SessionRevoked": { "description": "Identifier-scoped or other-device sessions revoked.", "headers": { "Idempotent-Replayed": { "$ref": "#/components/headers/Replayed" } } },
+      "Error": { "description": "Structured API error.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } },
+      "Throttled": { "description": "Rate limit or device cooldown.", "headers": { "X-Request-Id": { "$ref": "#/components/headers/RequestId" }, "Retry-After": { "$ref": "#/components/headers/Retry" } }, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ErrorEnvelope" } } } }
+    },
+    "schemas": {
+      "Id": { "type": "string", "format": "uuid", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-7[0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$" },
+      "Proof": { "type": "string", "pattern": "^[0-9a-f]{64}$", "writeOnly": true },
+      "TransferReference": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "transfer_id"],
+        "properties": { "device_token": { "type": "string", "writeOnly": true }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+          "transfer_id": { "$ref": "#/components/schemas/Id" } }
+      },
+      "TransferMatchCode": { "type": "string", "pattern": "^[0-9A-F]{8}$", "description": "Both devices must display the same code before the source approves." },
+      "OauthChallenge": { "type": "string", "pattern": "^[A-Za-z0-9_-]{43}$" },
+      "LinkDevice": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof"], "properties": {
+        "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }
+      } },
+      "ConsentCompletion": { "type": "object", "additionalProperties": false,
+        "required": ["device_token", "device_proof", "state", "code"], "properties": {
+          "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" },
+          "state": { "$ref": "#/components/schemas/OauthChallenge" }, "code": { "type": "string", "minLength": 1, "maxLength": 2048, "writeOnly": true }
+        }
+      },
+      "LinkedGoogle": { "type": "object", "required": ["provider", "email_masked", "linked_at"], "properties": {
+        "provider": { "type": "string", "enum": ["google"] }, "email_masked": { "type": "string" }, "linked_at": { "type": "string", "format": "date-time" }
+      } },
+      "SessionSummary": { "type": "object", "required": ["id", "device_hash_short", "platform", "created_at", "last_seen_at", "current"], "properties": {
+        "id": { "$ref": "#/components/schemas/Id" }, "device_hash_short": { "type": "string", "pattern": "^[0-9a-f]{8}$" },
+        "platform": { "$ref": "#/components/schemas/Platform" }, "created_at": { "type": "string", "format": "date-time" },
+        "last_seen_at": { "type": "string", "format": "date-time", "nullable": true }, "current": { "type": "boolean" }
+      } },
+      "Platform": { "type": "string", "enum": ["android", "ios"] },
+      "NullableString": { "type": "string", "nullable": true },
+      "Registration": { "type": "object", "additionalProperties": false, "required": ["raw_device_id", "device_proof", "platform", "app_version", "os_version"], "properties": {
+        "raw_device_id": { "type": "string", "writeOnly": true, "maxLength": 128 }, "device_proof": { "$ref": "#/components/schemas/Proof" }, "platform": { "$ref": "#/components/schemas/Platform" }, "app_version": { "type": "string", "maxLength": 32 }, "os_version": { "type": "string", "maxLength": 64 }
+      } },
+      "GuestEntry": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "locale"], "properties": {
+        "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }, "locale": { "type": "string", "enum": ["my", "en"] }
+      } },
+      "Refresh": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "refresh_token"], "properties": {
+        "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }, "refresh_token": { "type": "string" }
+      } },
+      "Logout": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "everywhere"], "properties": {
+        "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }, "everywhere": { "type": "boolean" }
+      } },
+      "QaEntry": { "type": "object", "additionalProperties": false, "required": ["device_token", "device_proof", "handle", "reset"], "properties": {
+        "device_token": { "type": "string" }, "device_proof": { "$ref": "#/components/schemas/Proof" }, "handle": { "type": "string", "enum": ["tester.a", "tester.b", "tester.social", "tester.premium", "tester.minor", "tester.fresh"] }, "reset": { "type": "boolean" }
+      } },
+      "RegistrationResult": { "type": "object", "required": ["device_hash", "device_token", "platform", "registered_at"], "properties": {
+        "device_hash": { "type": "string" }, "device_token": { "type": "string" }, "platform": { "$ref": "#/components/schemas/Platform" }, "registered_at": { "type": "string", "format": "date-time" }
+      } },
+      "Tokens": { "type": "object", "required": ["access_token", "refresh_token", "expires_in"], "properties": {
+        "access_token": { "type": "string" }, "refresh_token": { "type": "string" }, "expires_in": { "type": "integer", "minimum": 1 }
+      } },
+      "Entry": { "allOf": [{ "$ref": "#/components/schemas/Tokens" }, { "type": "object", "required": ["account", "device_binding", "is_new_account"], "properties": {
+        "account": { "$ref": "#/components/schemas/Account" }, "device_binding": { "$ref": "#/components/schemas/Binding" }, "is_new_account": { "type": "boolean" }
+      } }] },
+      "Account": { "type": "object", "required": ["id", "status", "is_guest", "display_name", "username", "created_at"], "properties": {
+        "id": { "$ref": "#/components/schemas/Id" }, "status": { "type": "string", "enum": ["active", "paused", "deleted", "banned"] }, "is_guest": { "type": "boolean" }, "display_name": { "$ref": "#/components/schemas/NullableString" }, "username": { "$ref": "#/components/schemas/NullableString" }, "created_at": { "type": "string", "format": "date-time" }
+      } },
+      "Binding": { "type": "object", "required": ["id", "role", "device_hash", "bound_at"], "properties": {
+        "id": { "$ref": "#/components/schemas/Id" }, "role": { "type": "string", "enum": ["primary", "secondary"] }, "device_hash": { "type": "string" }, "bound_at": { "type": "string", "format": "date-time" }
+      } },
+      "Me": { "type": "object", "required": ["account", "profile", "identities", "entitlements", "flags"], "properties": {
+        "account": { "$ref": "#/components/schemas/Account" }, "profile": { "$ref": "#/components/schemas/Profile" },
+        "identities": { "type": "array", "maxItems": 0, "items": { "type": "object" } },
+        "entitlements": { "type": "array", "maxItems": 0, "items": { "type": "object" } },
+        "flags": { "type": "object", "required": ["dating_enabled", "dating_paused", "premium", "test_mode_panel"], "properties": {
+          "dating_enabled": { "type": "boolean" }, "dating_paused": { "type": "boolean" }, "premium": { "type": "boolean" }, "test_mode_panel": { "type": "boolean" }
+        } }
+      } },
+      "Profile": { "type": "object", "required": ["display_name", "username", "bio", "avatar_url", "birth_date"], "properties": {
+        "display_name": { "$ref": "#/components/schemas/NullableString" }, "username": { "$ref": "#/components/schemas/NullableString" }, "bio": { "$ref": "#/components/schemas/NullableString" }, "avatar_url": { "$ref": "#/components/schemas/NullableString" }, "birth_date": { "type": "string", "format": "date", "nullable": true }
+      } },
+      "ErrorEnvelope": { "type": "object", "required": ["error"], "properties": {
+        "error": { "type": "object", "required": ["code", "message_key", "status", "request_id", "details", "retry_after_seconds"], "properties": {
+          "code": { "type": "string" }, "message_key": { "type": "string" }, "status": { "type": "integer", "minimum": 400, "maximum": 599 }, "request_id": { "$ref": "#/components/schemas/Id" }, "details": { "type": "object", "additionalProperties": true }, "retry_after_seconds": { "type": "integer", "nullable": true, "minimum": 1 }
+        } }
+      } }
+    }
+  }
 }
