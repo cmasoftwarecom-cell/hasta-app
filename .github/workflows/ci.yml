@@ -39,6 +39,7 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           npm run test:smoke
+          node --test test/google-link.test.cjs
           node --test test/native-api.test.cjs
       - name: Redis isolation smoke (test index 15)
         env:
@@ -61,6 +62,8 @@ jobs:
           node-version: '20.20.2'
       - name: T20, T36, T37, T45, T48 and design tokens
         run: |
+          npm --prefix apps/server ci
+          npm --prefix apps/server run build
           node --test tools/scripts/identity-gate.test.mjs
           node tools/scripts/static-gates.mjs
           node tools/scripts/design-tokens.mjs --check
@@ -86,6 +89,9 @@ jobs:
         working-directory: apps/mobile
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.20.2'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -110,6 +116,8 @@ jobs:
       - name: T36 and T45 check packaged text and compiled payloads
         working-directory: .
         run: |
+          npm --prefix apps/server ci
+          npm --prefix apps/server run build
           unzip -q apps/mobile/build/app/outputs/flutter-apk/app-debug.apk -d "$RUNNER_TEMP/hasta-apk"
           unzip -q apps/mobile/build/app/outputs/flutter-apk/app-release.apk -d "$RUNNER_TEMP/hasta-release"
           node tools/scripts/check-qa-artifacts.mjs "$RUNNER_TEMP/hasta-apk" "$RUNNER_TEMP/hasta-release"

@@ -6,6 +6,8 @@ import { AuthController } from './modules/auth/controller';
 import { GuestAuth } from './modules/auth/service';
 import { ReplayExpiry } from './modules/auth/replay-expiry';
 import { uuid7, uuidPattern } from './modules/auth/credentials';
+import { GoogleLinkController } from './modules/identity/link-controller';
+import { GOOGLE_LINK, GoogleLinks, googleLinkProvider } from './modules/identity/link-service';
 
 @Injectable()
 export class Database extends PrismaClient implements OnApplicationShutdown {
@@ -37,12 +39,15 @@ class ApiErrors {
       status, request_id: res.getHeader('X-Request-Id'), details: body?.details ?? {}, retry_after_seconds: body?.seconds ?? null } });
   }
 }
-@Module({ controllers: [HealthController, AuthController],
-  providers: [Database, { provide: PrismaClient, useExisting: Database }, GuestAuth, ReplayExpiry] })
+@Module({ controllers: [HealthController, AuthController, GoogleLinkController],
+  providers: [Database, { provide: PrismaClient, useExisting: Database }, GuestAuth, ReplayExpiry,
+    GoogleLinks] })
 class AppModule {}
 
-export async function createApp() {
-  const app = await NestFactory.create(AppModule, { logger: ['warn', 'error'] });
+export async function createApp(providerFactory = googleLinkProvider) {
+  const app = await NestFactory.create({
+    module: AppModule, providers: [{ provide: GOOGLE_LINK, useFactory: providerFactory }],
+  }, { logger: ['warn', 'error'] });
   app.use((request: { headers: Record<string, unknown> }, response: { setHeader(name: string, value: string): void },
     next: () => void) => {
     const id = request.headers['x-request-id'];

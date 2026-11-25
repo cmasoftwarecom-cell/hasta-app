@@ -20,10 +20,10 @@ function nestRoutes(text) {
   let controller = '';
   return decorators.map(({ 0: declaration, 1: kind, index }) => {
     const args = text.slice(index + declaration.length);
-    const literal = /^\s*(['"`])([^'"`\\\r\n]*)\1\s*\)/.exec(args);
+    const literal = /^\s*(['"`])((?:\\\\:|[^'"`\\\r\n])*)\1\s*\)/.exec(args);
     assert.ok(/^\s*\)/.test(args) || (literal && !literal[2].includes('${')),
       'T37: route must use a static literal so the gate can inspect it');
-    const path = literal?.[2] ?? '';
+    const path = literal?.[2]?.replace(/\\\\:/g, ':') ?? '';
     if (kind === 'Controller') {
       controller = normalize(path);
       return controller;
@@ -104,8 +104,7 @@ export async function checkIdentityGate({ apiPaths = {}, apiSchemas = {},
     }
   }
   if (needsVerification) {
-    // S1 deliberately passes no adapter. S2 must wire this to the real server
-    // verification path before activating a link or recovery completion route.
+    // Completion routes and token boundaries never pass without verification.
     assert.ok(verification, 'T37: trust surface requires a behavioural verifier');
     await checkVerifier(verification);
   }

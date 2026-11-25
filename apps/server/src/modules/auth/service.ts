@@ -166,6 +166,62 @@ export class GuestAuth {
     if (!enrolled || (enrolled.qa_only && !this.qaAllowed)) throw denied();
     return bound.account;
   }
+
+  async provedActor(tx: Tx, bearer: string, credentials: { device_token: string; device_proof: string }) {
+    const actor = access(bearer);
+    const device = deviceClaims(credentials.device_token);
+    if (actor.hash !== device.hash) throw denied();
+    await lock(tx, `device:${actor.hash}`);
+    await lock(tx, `account:${actor.sub}`);
+    await this.proveEnrollment(tx, 'logout', device, sha(credentials.device_proof));
+    return actor;
+  }
+
+  async listSessions(bearer: string) {
+    const actor = access(bearer);
+    return this.db.$transaction(async (tx) => {
+      await lock(tx, `account:${actor.sub}`);
+      await this.current(tx, actor);
+      const bindings = await tx.device_bindings.findMany({ where: { account_id: actor.sub, revoked_at: null },
+        select: { device_hash: true, platform: true } });
+      const platforms = new Map(bindings.map(({ device_hash, platform }) => [device_hash, platform]));
+      const rows = await tx.sessions.findMany({ where: { account_id: actor.sub, revoked_at: null,
+        expires_at: { gt: new Date() }, device_hash: { in: [...platforms.keys()] } }, orderBy: { created_at: 'desc' },
+        select: { id: true, device_hash: true, created_at: true, last_seen_at: true } });
+      return rows.map(({ id, device_hash, created_at, last_seen_at }) =>
+        ({ id, device_hash_short: device_hash.slice(0, 8), platform: platforms.get(device_hash),
+          created_at, last_seen_at, current: id === actor.sid }));
+    });
+  }
+
+  async revokeSession(bearer: string, credentials: { device_token: string; device_proof: string },
+    target: string, key: string) {
+    return this.db.$transaction(async (tx) => {
+      const actor = await this.provedActor(tx, bearer, credentials);
+      const scope = `revoke-session:${actor.sid}`, fingerprint = sha(target);
+      const now = new Date();
+      await tx.auth_requests.deleteMany({ where: { scope, key, expires_at: { lte: now } } });
+      const prior = await tx.auth_requests.findUnique({ where: { scope_key: { scope, key } } });
+      if (prior) {
+        if (prior.fingerprint !== fingerprint) throw failure(409, 'idempotency_conflict');
+        return true;
+      }
+      const account = await this.current(tx, actor);
+      if (target === 'others') {
+        if (account.is_guest || !await tx.identities.findFirst({ where: { account_id: actor.sub,
+          provider: 'google', email_verified: true } })) throw failure(409, 'recovery_required');
+        await revoke(tx, { account_id: actor.sub, device_hash: { not: actor.hash } }, 'logout');
+      } else {
+        const requested = await tx.sessions.findFirst({ where: { id: target, account_id: actor.sub } });
+        if (!requested) throw failure(404, 'not_found');
+        await revoke(tx, { family_id: requested.family_id, account_id: actor.sub }, 'logout');
+      }
+      await tx.auth_requests.create({ data: { scope, key, fingerprint,
+        sealed: seal(null, `${scope}:${key}:${fingerprint}`), expires_at: new Date(now.getTime() + 604_800_000) } });
+      return false;
+    });
+  }
+
   async me(bearer: string) {
     const a = await this.current(this.db, access(bearer));
     const p = await this.db.profiles.findUnique({ where: { user_id: a.id } });

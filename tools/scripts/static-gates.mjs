@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { basename, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { checkIdentityGate } from './identity-gate.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -35,6 +36,7 @@ const gates = {
     apiPaths: api.paths,
     apiSchemas: api.components?.schemas,
     sources: sources.map((path) => ({ path, text: read(path) })),
+    verification: createRequire(import.meta.url)('../../apps/server/test/google-proof-fixture.cjs').liveVerification(),
   }),
   T45: () => {
     // Legacy handoff/reference docs are not application source or packaged artifacts.

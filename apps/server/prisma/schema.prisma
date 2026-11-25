@@ -40,6 +40,7 @@ enum transfer_status {
 enum abuse_event {
   guest_created
   account_deleted
+  google_linked
 }
 
 model accounts {
