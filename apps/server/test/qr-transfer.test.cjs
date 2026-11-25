@@ -192,6 +192,28 @@ test('T25–T29 QR transfer: local HTTP, native-shaped signatures and committed 
     await expire(occupiedLate.transfer_id);
     err(await confirm2(), 410, 'token_expired');
     assert.equal((await call('me', undefined, actor2)).status, 200);
+
+    // P1-QR-CLAIM-EXPIRY / T25–T28: a missed claim does not undo a committed move.
+    const source3 = await enroll(), replacement = await enroll();
+    const original = await guest(source3);
+    const actor3 = original.data.access_token;
+    const offer = (await call(qr + 'start', { ...source3.creds, approval_key: approval.approval_key }, actor3)).data;
+    const lateToken = JSON.parse(offer.qr_payload).token;
+    const lateId = offer.transfer_id;
+    assert.equal((await redeem(replacement, lateToken)).status, 200);
+    const lateChallenge = (await status(lateId, actor3)).data.approval_challenge;
+    assert.equal((await call(qr + 'confirm', { ...source3.creds, transfer_id: lateId,
+      approval_signature: approval.sign(lateChallenge) }, actor3)).status, 200);
+    const beforeResume = await db.accounts.count();
+    await expire(lateId);
+    err(await claim(replacement, lateId), 410, 'token_expired');
+    err(await call('me', undefined, actor3), 401, 'unauthenticated');
+    const resumed = await guest(replacement);
+    assert.equal(resumed.status, 200);
+    assert.equal(resumed.data.is_new_account, false);
+    assert.equal(resumed.data.account.id, original.data.account.id);
+    assert.equal(await db.accounts.count(), beforeResume);
+    assert.equal((await call('me', undefined, resumed.data.access_token)).status, 200);
   } finally {
     await Promise.all([app.close(), normal.close(), otherListener.close()]);
   }

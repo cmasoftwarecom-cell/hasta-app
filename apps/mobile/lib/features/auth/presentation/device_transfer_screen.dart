@@ -254,7 +254,9 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
         error == null &&
         match == null;
     final status = terminal
-        ? copy.transferEnded
+        ? widget.receiving && _receipt != null
+            ? copy.transferReceiverEnded(copy.welcomeContinue)
+            : copy.transferEnded
         : switch (error) {
             AuthFailure(offline: true) => copy.offline,
             AuthFailure(status: 429) => copy.rateLimited,

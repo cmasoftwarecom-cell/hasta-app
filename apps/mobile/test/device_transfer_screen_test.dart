@@ -24,7 +24,9 @@ class _Session extends GuestRepository {
   int guests = 0;
   bool scanned = false;
   Future<void> Function()? reject;
-  final expires =
+  bool expireOnRedeem = false;
+  bool expireOnClaim = false;
+  var expires =
       DateTime.timestamp().add(const Duration(seconds: 120)).toIso8601String();
 
   @override
@@ -71,6 +73,7 @@ class _Session extends GuestRepository {
   Future<TransferReceipt> redeemDeviceTransfer(String qrPayload) async {
     order.add('redeem');
     expect(qrPayload, _qr);
+    if (expireOnRedeem) throw const AuthFailure('token_expired', status: 410);
     return TransferReceipt.fromReply({
       'transfer_id': _id,
       'status': 'awaiting_confirmation',
@@ -82,6 +85,7 @@ class _Session extends GuestRepository {
   @override
   Future<GuestProfile> claimDeviceTransfer(TransferReceipt receipt) async {
     order.add('claim');
+    if (expireOnClaim) throw const AuthFailure('token_expired', status: 410);
     return profile = _profile;
   }
 }
@@ -122,6 +126,57 @@ class _Surface extends NativeQrSurface {
 }
 
 void main() {
+  for (final (language, expiry) in [
+    ('en', 'timer'),
+    ('my', 'claim'),
+    ('en', 'redeem'),
+  ]) {
+    testWidgets('T25/T28 receiver guidance for $expiry expiry ($language)',
+        (tester) async {
+      final order = <String>[];
+      final session = _Session(order, null)
+        ..expireOnRedeem = expiry == 'redeem'
+        ..expireOnClaim = expiry == 'claim';
+      if (expiry == 'timer') {
+        session.expires = DateTime.utc(2000).toIso8601String();
+      }
+      addTearDown(session.close);
+      final surface = _Surface(order);
+      final my = language == 'my';
+      final welcome = my ? 'စတင်အသုံးပြုရန်' : 'Continue';
+      await tester.pumpWidget(HastaApp(
+          session: session,
+          locale: Locale(language),
+          transferSurface: surface));
+      await tester.pumpAndSettle();
+      surface.launch();
+      await tester.pumpAndSettle();
+      await tester.tap(
+          find.text(my ? 'ကင်မရာဖွင့်ပြီး စကင်ဖတ်ရန်' : 'Open camera to scan'));
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+      expect(order.contains('claim'), expiry == 'claim');
+      if (expiry == 'redeem') {
+        expect(find.textContaining('Start a new transfer on your old device.'),
+            findsOneWidget);
+        expect(find.textContaining('If you approved'), findsNothing);
+      } else {
+        expect(
+            find.textContaining(my
+                ? 'အတည်ပြုပြီးပါက ဤစက်တွင်'
+                : 'If you approved the transfer on your old device'),
+            findsOneWidget);
+        expect(find.textContaining('“$welcome”'), findsOneWidget);
+      }
+      expect(session.guests, 0);
+      await tester.tap(find.text(my ? 'ပိတ်ရန်' : 'Close'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(FilledButton, welcome), findsOneWidget);
+      expect(session.guests, 0);
+    });
+  }
+
   for (final failFirst in [false, true]) {
     testWidgets(
         failFirst

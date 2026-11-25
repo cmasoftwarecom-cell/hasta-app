@@ -53,6 +53,8 @@ P0-QR-ROLLOUT-GATE: The regular server cannot enable QR transfer via its feature
 
 P1-QR-BACK-CANCEL: Android Back and Close now share the sender's rejection path for a live, unsigned offer. The QR disappears immediately; a failed rejection leaves the screen open to retry without regenerating it. T27 widget regressions cover waiting, repeated Back while in flight, and retry via Close. See ADR-0016; physical T28 remains open.
 
+P1-QR-CLAIM-EXPIRY: After a registered scan, both local timeout and a server claim-expiry response show conditional en/my guidance: if approved, close and use the existing Welcome action on the replacement; otherwise start a new transfer on the old device. No automatic sign-in, TTL extension, or API change. T25/T28 widgets cover both expiry paths and expiry before a registered scan; the loopback PostgreSQL regression checks that the replacement resumes the same account after a confirmed transfer without creating a second account. Physical T28 remains open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -83,7 +85,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix P1-QR-CLAIM-EXPIRY
+Hasta fix P2-QR-TITLE-SCALE
 ```
 
 ## Changelog (append one line per merged PR)

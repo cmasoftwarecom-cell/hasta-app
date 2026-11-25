@@ -28,6 +28,8 @@
   "transferCompare": "Compare this code on both devices. Approve on the old device only if the codes match.",
   "transferQrLabel": "Transfer QR. Scan it using your new device.",
   "transferEnded": "This transfer has ended. Start a new transfer on your old device.",
+  "transferReceiverEnded": "If you approved the transfer on your old device, close this screen and tap “{continueLabel}” on this device to resume your account. If you did not approve it, start a new transfer on your old device.",
+  "@transferReceiverEnded": {"placeholders": {"continueLabel": {"type": "String"}}},
   "transferGuestExists": "Delete the guest account on this device before transferring.",
   "transferAccountExists": "This device already has a Hasta account. It can’t receive a transfer.",
   "transferCameraDenied": "Allow camera access in system settings to scan the transfer QR.",
