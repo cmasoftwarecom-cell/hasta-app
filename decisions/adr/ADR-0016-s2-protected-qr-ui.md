@@ -1,0 +1,10 @@
+# ADR-0016: Android-only protected QR presentation for local QA
+
+Status: Proposed in draft PR #2. Extends ADR-0015 without enabling release traffic.
+
+- Sender lives in signed-in Settings → Account → Change device. An opted-in Android debug build registers a launcher shortcut for a fresh receiver. The shortcut can only open the receiver screen; it never carries a token, account ID, device ID, or credentials, and the receiver must explicitly open the camera. Welcome actions remain Guest and Privacy.
+- `com.journeyapps:zxing-android-embedded:4.3.0` is pinned to the Android debug dependency graph. It supplies ZXing's QR matrix encoder and a local QR-only camera decoder. The default capture activity is removed; the app's scanner activity is not exported and sets `FLAG_SECURE` before showing a preview. No gallery, clipboard, result image, analytics, or external scanning app is used. The release/profile variants have a stub, no scanner dependency or camera permission from it, and no registered shortcut.
+- Before requesting a source token, the app sets and verifies `FLAG_SECURE`; the native matrix bridge also checks it. This window flag stays set for the rest of the Activity lifetime, including route transitions and task snapshots, rather than risking an unprotected final frame. The widget hides the code in the background and after scan, terminal failure, or expiry; the server deadline is authoritative. The native bridge gives Flutter matrix bytes rather than loading QR images into an image cache.
+- Camera permission denial, missing camera, offline, bad QR and occupied-device conflicts are explicit states. Both devices show a matching code; the source uses the existing hardware-backed OS approval. Polling remains a local-only substitute for realtime notifications. There is no iOS QR surface until a capture-protection policy is approved and verified.
+
+Release remains disabled. [The local T28 runbook](../../docs/qa/t28-native-transfer.md) requires two dedicated physical Android 11+ devices. A widget run, a successful APK build, or an emulator with a software/fixture signing key does not qualify as native T28.

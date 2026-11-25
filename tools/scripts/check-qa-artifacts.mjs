@@ -13,6 +13,7 @@ const contents = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((ent
 const kernel = contents(debug).find((path) => basename(path) === 'kernel_blob.bin');
 assert.ok(kernel, 'Debug artifact must contain the Dart kernel');
 const debugPayload = readFileSync(kernel);
+const includes = (payload, text) => payload.includes(text) || payload.includes(Buffer.from(text, 'utf16le'));
 for (const value of [marker, ...fixtures, 'qa/guest']) {
   assert.ok(debugPayload.includes(value), `Missing debug positive control: ${value}`);
 }
@@ -27,5 +28,18 @@ for (const path of releaseFiles) {
   for (const value of [marker, 'Hasta QA fixtures', 'Reset fixture before opening', ...fixtures, 'qa/guest']) {
     assert.ok(!payload.includes(value) && !payload.includes(Buffer.from(value, 'utf16le')), `QA payload in ${path}: ${value}`);
   }
+}
+if (platform === 'android') {
+  const probe = (root, dexMarker) => {
+    const manifest = readFileSync(join(root, 'AndroidManifest.xml'));
+    const dex = readdirSync(root).filter((name) => /^classes\d*\.dex$/.test(name))
+      .some((name) => includes(readFileSync(join(root, name)), dexMarker));
+    return { camera: includes(manifest, 'android.permission.CAMERA'), dex };
+  };
+  const marker = 'Lapp/hasta/mobile/SecureQrCaptureActivity;';
+  assert.deepEqual(probe(debug, marker), { camera: true, dex: true }, 'Debug must package the native scanner');
+  assert.deepEqual(probe(release, marker), { camera: false, dex: false }, 'Release must exclude the scanner and camera permission');
+  assert.equal(probe(release, 'Lcom/journeyapps/barcodescanner/CaptureActivity;').dex, false,
+    'Release must exclude the scanner SDK');
 }
 console.log(`T36: PASS (${platform}: QA-positive debug artifact; QA excluded from release with the same defines)`);

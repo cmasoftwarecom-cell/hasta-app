@@ -10,8 +10,8 @@
 - updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
 
 ## Position
-- current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, and feature-gated QR transfer core with Flutter repository and native approval bridges; sprint remains open)
-- blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, QR display/scanner and capture protection UX, on-device transfer T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
+- current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
+- blocked by: explicit recovery entry outside Welcome, native Android/iOS recovery and signed HTTPS association QA, iOS QR capture policy, physical Android T28, realtime transfer notifications, mobile Linked Accounts and Security/Devices flows, and SPEC §17.2 friends. Keep Gmail linking, recovery and QR transfer disabled by default; do not start S3 or Premium.
 - active QA scope: local only, using mock data or isolated local databases. Remote staging is outside this QA sequence and does not block S2; prior staging evidence and the runbook are retained below. This does not waive release QA or change any test gate.
 - completed and merged: `#1` (S0 only; `c97e973`; staging QA was not run)
 - open PRs: [#2](https://github.com/cmasoftwarecom-cell/hasta-app/pull/2), existing draft, S1 plus partial S2 (`feature/HAS-1a-guest-auth`)
@@ -45,6 +45,10 @@ S2 native recovery follow-up: Android App Link and iOS Universal Link handlers n
 
 S2 QR transfer: T25 expiry, T26 concurrent single-use, T27 old-device signed approval, and T29 occupied-target protection are covered by isolated PostgreSQL HTTP tests. T28 server-side revocation and Flutter repository credential/cache removal are covered; the native two-device user journey remains open. The server and Flutter repository implement a start → scan → signed confirm → claim sequence; the release flag stays off. See ADR-0015 for the native and presentation limits.
 
+S2 QR presentation: opt-in Android debug Settings and launcher shortcut use `FLAG_SECURE` and an on-device QR-only camera decoder. Flutter widget checks cover protection before issuance, camera denial, hiding the QR on background or scan, and the Myanmar receiver at 320×568 with 200% text scale. The local HTTP fixture confirmed the binding/session postconditions in disposable PostgreSQL 16. The [local T28 runbook](../docs/qa/t28-native-transfer.md) checks the secure window, optical scan and OS approval, old-device Welcome after relaunch and the database postconditions. The native runner stopped at preflight because no authorized Android devices were connected; native T28 remains open. ADR-0016 records debug-only scope and the iOS hold.
+
+S2 local build verification: Flutter analysis and 22 tests passed in both default and QA configurations. Local Android debug and release APKs passed the T36 artifact check with the same QA feature defines: debug includes the scanner and camera permission; release excludes both and the quick-test fixtures. Neither artifact verifies physical T28 or signed distribution.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -62,6 +66,7 @@ S2 QR transfer: T25 expiry, T26 concurrent single-use, T27 old-device signed app
 | S2 lost-device recovery and inactive historical bindings, with a proved target installation | proposed in PR #2 | [ADR-0013](../decisions/adr/ADR-0013-s2-lost-device-recovery.md) |
 | S2 native callback bridge and Android reinstall QA fixture | proposed in PR #2 | [ADR-0014](../decisions/adr/ADR-0014-s2-native-recovery-callback.md) |
 | S2 hashed QR token, signed approval, atomic binding move and claim | proposed in PR #2 | [ADR-0015](../decisions/adr/ADR-0015-s2-qr-transfer.md) |
+| S2 protected Android debug QR screen and scanner; physical T28 harness | proposed in PR #2 | [ADR-0016](../decisions/adr/ADR-0016-s2-protected-qr-ui.md) |
 
 ## `[PROPOSAL]` values — remote-config only (confirm key names in next report)
 device token 365 d · refresh 30 d · guest-create 3/device/hour · device-register 10/hour · line-height floor on display/h1 · opener limit 3 · dormant 7 d · Super Like / Undo caps · feed + dating score weights · retention 30 d purge / 35 d backup / 30 d evidence · KPI targets
@@ -74,7 +79,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta S2 wire the protected QR display and scanner, then run native T28
+Hasta test T28 on two dedicated local Android phones
 ```
 
 ## Changelog (append one line per merged PR)

@@ -12,6 +12,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
     private var recovery: MethodChannel? = null
+    private val qr by lazy { QrSurface(this) }
     private val debugBuild get() = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
     private val recoveryHost: String? by lazy {
         packageManager.getActivityInfo(componentName, PackageManager.GET_META_DATA)
@@ -21,6 +22,7 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         TransferApproval(this).register(flutterEngine.dartExecutor.binaryMessenger)
+        qr.register(flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.hasta.mobile/device")
             .setMethodCallHandler { call, result ->
                 if (call.method != "info") {
@@ -55,12 +57,14 @@ class MainActivity: FlutterActivity() {
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        qr.detach()
         recovery?.setMethodCallHandler(null)
         recovery = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
 
     override fun onNewIntent(intent: Intent) {
+        qr.receive(intent)
         val uri = intent.data
         if (intent.action == Intent.ACTION_VIEW && isRecoveryCallback(uri)) {
             intent.data = null
@@ -69,6 +73,11 @@ class MainActivity: FlutterActivity() {
             return
         }
         super.onNewIntent(intent)
+    }
+
+    @Deprecated("FlutterActivity forwards legacy native activity results")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (!qr.onResult(requestCode, resultCode, data)) super.onActivityResult(requestCode, resultCode, data)
     }
 
     private fun isRecoveryCallback(uri: Uri?): Boolean {

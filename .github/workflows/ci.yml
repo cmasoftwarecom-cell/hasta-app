@@ -113,8 +113,9 @@ jobs:
           flutter test --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
       - name: Build Android QA and release artifacts
         run: |
-          flutter build apk --debug --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
-          flutter build apk --release --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
+          qa=(--dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true --dart-define=HASTA_AUTH_QR_TRANSFER_ENABLED=true)
+          flutter build apk --debug --no-pub "${qa[@]}"
+          flutter build apk --release --no-pub "${qa[@]}"
       - name: T36 and T45 check packaged text and compiled payloads
         working-directory: .
         run: |

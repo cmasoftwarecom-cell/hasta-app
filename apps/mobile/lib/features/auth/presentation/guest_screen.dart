@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import '../../../core/design/tokens.dart';
+import '../data/guest_repository.dart';
+import '../data/native_qr_surface.dart';
 import '../domain/guest_session.dart';
+import 'device_transfer_screen.dart';
 
 const _environment = String.fromEnvironment('HASTA_ENV');
 const _qa = !kReleaseMode &&
@@ -13,8 +16,9 @@ const _qa = !kReleaseMode &&
     (_environment == 'dev' || _environment == 'test' || _environment == 'beta');
 
 class GuestScreen extends StatefulWidget {
-  const GuestScreen({super.key, required this.session});
+  const GuestScreen({super.key, required this.session, this.transferSurface});
   final GuestSession session;
+  final NativeQrSurface? transferSurface;
 
   @override
   State<GuestScreen> createState() => _GuestScreenState();
@@ -27,16 +31,21 @@ class _GuestScreenState extends State<GuestScreen> {
   bool _settings = false;
   Timer? _press;
   Future<void> Function()? _retry;
+  bool _transferReady = false;
+  bool _transferOpen = false;
+  bool _receiveRequested = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(_restore());
+    unawaited(_prepareTransfer());
   }
 
   @override
   void dispose() {
     _press?.cancel();
+    widget.transferSurface?.detach();
     super.dispose();
   }
 
@@ -54,7 +63,10 @@ class _GuestScreenState extends State<GuestScreen> {
         _failure = error is AuthFailure ? error : const AuthFailure('generic');
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        _receiveIfReady();
+      }
     }
   }
 
@@ -65,6 +77,71 @@ class _GuestScreenState extends State<GuestScreen> {
         final restored = await widget.session.restore();
         if (mounted) _profile = restored;
       });
+
+  Future<void> _prepareTransfer() async {
+    final surface = widget.transferSurface;
+    if (surface == null || widget.session is! GuestRepository) return;
+    try {
+      final launched = await surface.arm(() {
+        if (!mounted || _transferOpen) return;
+        _receiveRequested = true;
+        _receiveIfReady();
+      });
+      if (!mounted) return;
+      setState(() {
+        _transferReady = true;
+        _receiveRequested = _receiveRequested || launched;
+      });
+      _receiveIfReady();
+    } on AuthFailure {
+      // The transfer UI is intentionally unavailable without its native guard.
+    }
+  }
+
+  void _receiveIfReady() {
+    if (!_receiveRequested || !_transferReady || _busy || _transferOpen) return;
+    _receiveRequested = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openTransfer(receiving: true));
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  Future<void> _openTransfer({required bool receiving}) async {
+    final session = widget.session;
+    final surface = widget.transferSurface;
+    if (!_transferReady ||
+        _transferOpen ||
+        _busy ||
+        surface == null ||
+        session is! GuestRepository ||
+        (!receiving && _profile == null)) {
+      return;
+    }
+    _transferOpen = true;
+    try {
+      final result = await Navigator.of(context).push<TransferResult>(
+        MaterialPageRoute(
+          builder: (_) => DeviceTransferScreen(
+            repository: session,
+            surface: surface,
+            receiving: receiving,
+          ),
+        ),
+      );
+      if (result != null && mounted) {
+        setState(() {
+          _profile = result.profile;
+          _settings = false;
+          _failure = null;
+        });
+      } else if (!receiving && mounted) {
+        await _restore();
+      }
+    } finally {
+      _transferOpen = false;
+    }
+  }
 
   Future<void> _enter(String locale) => _run(() async {
         final profile = await widget.session.enter(locale);
@@ -179,12 +256,22 @@ class _GuestScreenState extends State<GuestScreen> {
                   Text(copy.account, style: style.titleLarge),
                   Text(copy.guestRisk),
                   SizedBox(height: space[5]),
+                  if (_transferReady)
+                    OutlinedButton(
+                      onPressed: _busy || offline
+                          ? null
+                          : () => _openTransfer(receiving: false),
+                      child: Text(copy.transferSend),
+                    ),
                   OutlinedButton(
                       onPressed: _busy ? null : _signOut,
                       child: Text(copy.signOut)),
                 ] else ...[
-                  Text(profile.displayName ?? copy.guestProfile,
-                      style: style.titleLarge),
+                  Semantics(
+                    identifier: 'hasta_signed_in_profile',
+                    child: Text(profile.displayName ?? copy.guestProfile,
+                        style: style.titleLarge),
+                  ),
                   Text(
                     profile.username == null
                         ? copy.emptyProfile
@@ -210,12 +297,15 @@ class _GuestScreenState extends State<GuestScreen> {
                         child: Text(copy.retry)),
                 ],
                 if (profile == null) ...[
-                  FilledButton(
-                    onPressed: _busy
-                        ? null
-                        : () => _enter(
-                            Localizations.localeOf(context).languageCode),
-                    child: Text(copy.welcomeContinue),
+                  Semantics(
+                    identifier: 'hasta_welcome_continue',
+                    child: FilledButton(
+                      onPressed: _busy
+                          ? null
+                          : () => _enter(
+                              Localizations.localeOf(context).languageCode),
+                      child: Text(copy.welcomeContinue),
+                    ),
                   ),
                   TextButton(
                       onPressed: () => _privacy(copy),

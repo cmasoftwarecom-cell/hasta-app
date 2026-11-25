@@ -31,10 +31,6 @@ class NativeTransferApproval {
         offer.id, await _material('approve', challenge, min: 11, max: 96));
   }
 
-  // Callers must not render a QR before this succeeds. Unsupported platforms
-  // fail closed, and the QR must be removed before setting this back to false.
-  Future<void> protectQr(bool secure) => _invoke<void>('protectQr', secure);
-
   Future<String> _material(String method, Object? arguments,
       {required int min, required int max}) async {
     final result = await _invoke<String>(method, arguments);

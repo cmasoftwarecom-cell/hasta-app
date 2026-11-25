@@ -1,21 +1,34 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 import 'core/design/tokens.dart';
 import 'features/auth/data/guest_repository.dart';
+import 'features/auth/data/native_qr_surface.dart';
 import 'features/auth/domain/guest_session.dart';
 import 'features/auth/presentation/guest_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(HastaApp(session: GuestRepository()));
+  const env = String.fromEnvironment('HASTA_ENV');
+  const qrQa = kDebugMode &&
+      bool.fromEnvironment('HASTA_AUTH_QR_TRANSFER_ENABLED') &&
+      (env == 'dev' || env == 'test' || env == 'beta');
+  runApp(HastaApp(
+    session: GuestRepository(),
+    transferSurface: qrQa && defaultTargetPlatform == TargetPlatform.android
+        ? const NativeQrSurface()
+        : null,
+  ));
 }
 
 class HastaApp extends StatelessWidget {
-  const HastaApp({super.key, required this.session, this.locale});
+  const HastaApp(
+      {super.key, required this.session, this.locale, this.transferSurface});
 
   final GuestSession session;
   final Locale? locale;
+  final NativeQrSurface? transferSurface;
 
   @override
   Widget build(BuildContext context) {
@@ -65,7 +78,7 @@ class HastaApp extends StatelessWidget {
         ).apply(bodyColor: colors.onSurface, displayColor: colors.onSurface),
         fontFamily: HastaTokens.myanmarFontFamily,
       ),
-      home: GuestScreen(session: session),
+      home: GuestScreen(session: session, transferSurface: transferSurface),
     );
   }
 }

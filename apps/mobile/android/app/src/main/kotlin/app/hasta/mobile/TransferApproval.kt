@@ -10,7 +10,6 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
 import android.util.Base64
-import android.view.WindowManager
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
 import java.security.KeyFactory
@@ -28,12 +27,6 @@ internal class TransferApproval(private val activity: Activity) {
         MethodChannel(messenger, "app.hasta.mobile/transfer_approval").setMethodCallHandler { call, result ->
             try {
                 when {
-                    call.method == "protectQr" -> {
-                        val secure = call.arguments as? Boolean ?: return@setMethodCallHandler unavailable(result)
-                        if (secure) activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                        else activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-                        result.success(null)
-                    }
                     Build.VERSION.SDK_INT < 30 -> unavailable(result)
                     call.method == "publicKey" -> {
                         val store = store()
