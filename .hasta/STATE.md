@@ -63,6 +63,8 @@ P2-WELCOME-RECOVERY-COPY: Welcome now renders the guest account-loss warning as 
 
 S2 Gmail Link (PR #3): signed-in Linked Accounts uses code-only consent and a masked status endpoint that preserves the frozen `/me` contract. Local T37/T38/T39/T43 fixtures cover provider boundaries, no merge, and the offline disabled action. T44 purchase attachment, native OAuth, T28 and native T30 remain open. ADR-0012 records the opt-in scope. SPEC and DS 1.0.2 are at their canonical paths. T49/T50 and the revised T45/T48 semantics are open separately.
 
+P1-GMAIL-SESSION-EXPIRY: Linked Accounts revalidates the proved account before starting consent and refreshes expired access through the existing device-bound flow. If completion expires, English/Myanmar copy prompts fresh consent; the old code is not retried under a rotated session. The T37/T40/T41/T42 loopback regression covers both expiry points.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -93,7 +95,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta review PR #3
+Hasta fix P1-T43-OFFLINE-TRANSITION
 ```
 
 ## Changelog (append one line per merged PR)

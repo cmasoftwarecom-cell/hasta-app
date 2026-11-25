@@ -351,6 +351,11 @@ class _GuestScreenState extends State<GuestScreen> {
                       child: Text(switch (failure) {
                         AuthFailure(offline: true) => copy.offline,
                         AuthFailure(code: 'identity_in_use') => copy.gmailInUse,
+                        AuthFailure(
+                          code: 'gmail_link_restart' || 'token_expired'
+                        )
+                            when _linkedAccounts =>
+                          copy.gmailRestart,
                         AuthFailure(code: 'google_email_unverified') =>
                           copy.gmailUnverified,
                         AuthFailure(status: 429) => copy.rateLimited,

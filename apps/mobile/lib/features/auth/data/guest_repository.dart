@@ -243,7 +243,7 @@ class GuestRepository implements GuestSession {
       throw const AuthFailure('configuration');
     }
     final source =
-        linkAccountId == null ? null : await _transferSource(linkAccountId);
+        linkAccountId == null ? null : await _activeLinkSource(linkAccountId);
     final proof = await _proof();
     return _write(
         source == null
@@ -307,12 +307,16 @@ class GuestRepository implements GuestSession {
     throw const AuthFailure('link_reply_invalid');
   }
 
-  Future<String?> linkedGmail(String accountId) async {
+  Future<Document> _activeLinkSource(String accountId) async {
     await _transferSource(accountId);
     if ((await restore())?.accountId != accountId) {
       throw const AuthFailure('unauthenticated', status: 401);
     }
-    final source = await _transferSource(accountId);
+    return _transferSource(accountId);
+  }
+
+  Future<String?> linkedGmail(String accountId) async {
+    final source = await _activeLinkSource(accountId);
     final identity = (await _request('auth/identities/google',
         access: source['access'] as String))['identity'];
     return identity == null ? null : _maskedGmail(identity);
@@ -322,7 +326,7 @@ class GuestRepository implements GuestSession {
       String accountId, GmailRecoveryConsent consent, Uri callback) async {
     final code = consent.acceptCallback(callback);
     final source = await _transferSource(accountId);
-    return _write('auth/identities/google/link:complete', {
+    return _write<String>('auth/identities/google/link:complete', {
       'device_token': source['device'],
       'device_proof': await _proof(),
       'state': consent.state,
@@ -333,7 +337,12 @@ class GuestRepository implements GuestSession {
         return _maskedGmail(reply['identity']);
       }
       throw const AuthFailure('link_reply_invalid');
-    }, access: source['access'] as String);
+    }, access: source['access'] as String)
+        .onError<AuthFailure>((error, stack) {
+      // Refresh rotates the session ID. This consent cannot follow it.
+      if (error.status == 401) throw const AuthFailure('gmail_link_restart');
+      Error.throwWithStackTrace(error, stack);
+    });
   }
 
   Future<GuestProfile> finishGmailRecovery(

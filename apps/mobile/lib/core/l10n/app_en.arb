@@ -23,6 +23,7 @@
   "gmailInUse": "This Gmail is already linked to another Hasta account. The accounts were not merged.",
   "gmailUnverified": "Verify your email with Google, then try again.",
   "gmailCancel": "Cancel",
+  "gmailRestart": "Gmail linking could not finish. Tap Connect Gmail to start again.",
   "signOut": "Sign out",
   "loading": "Loading…",
   "rateLimited": "Too many attempts. Wait a moment, then try again.",

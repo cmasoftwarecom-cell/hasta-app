@@ -44,6 +44,7 @@ class _GuestSession implements GuestSession {
 
 class _GmailActions implements GmailLinkActions {
   bool offline = true;
+  bool expireFirstAttempt = true;
   String? connectedAccount;
 
   @override
@@ -54,6 +55,10 @@ class _GmailActions implements GmailLinkActions {
 
   @override
   Future<String> connect(String accountId) async {
+    if (expireFirstAttempt) {
+      expireFirstAttempt = false;
+      throw const AuthFailure('gmail_link_restart');
+    }
     connectedAccount = accountId;
     return 'a***@example.invalid';
   }
@@ -134,7 +139,7 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
-    testWidgets('T37/T43: Gmail linking only in Settings ($language)',
+    testWidgets('T37/T43: Gmail linking in Settings, with restart ($language)',
         (tester) async {
       final copy = await AppLocalizations.delegate.load(Locale(language));
       final gmail = _GmailActions();
@@ -155,6 +160,8 @@ void main() {
       expect(tester.widget<FilledButton>(connect).onPressed, isNull);
       gmail.offline = false;
       await tap(find.text(copy.retry));
+      await tap(connect);
+      expect(find.text(copy.gmailRestart), findsOneWidget);
       await tap(connect);
       expect(gmail.connectedAccount, 'guest');
       expect(

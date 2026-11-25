@@ -146,7 +146,7 @@ void main() {
   });
 
   test(
-      'T40/T41/T42: proof durability, lost response retry, refresh, cache and logout',
+      'T37/T40/T41/T42: device-bound refresh before Gmail link, cache and logout',
       () async {
     final secure = _MemoryCredentials();
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -155,6 +155,8 @@ void main() {
     final requests = <(String, String?, String?, Document)>[];
     var dropRegister = true;
     var rejectAccess = true;
+    var refreshes = 0, starts = 0;
+    final redirect = Uri.https('callback.example.invalid', '/recover');
     final account = {
       'id': 'guest',
       'display_name': 'Traveler',
@@ -185,8 +187,32 @@ void main() {
         response.write(jsonEncode({'account': account, 'profile': account}));
       } else if (path.endsWith('/refresh')) {
         rejectAccess = false;
-        response.write(jsonEncode(
-            {'access_token': 'next', 'refresh_token': 'next-refresh'}));
+        refreshes++;
+        response.write(jsonEncode({
+          'access_token': 'next-$refreshes',
+          'refresh_token': 'next-refresh-$refreshes',
+        }));
+      } else if (path.endsWith('/link:start') && !rejectAccess) {
+        final state = (++starts).toString().padLeft(43, 'a');
+        final nonce = ''.padLeft(43, 'b');
+        response.write(jsonEncode({
+          'state': state,
+          'nonce': nonce,
+          'expires_in': 300,
+          'auth_url': Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+            'state': state,
+            'nonce': nonce,
+            'redirect_uri': redirect.toString(),
+            'response_type': 'code',
+            'code_challenge_method': 'S256',
+          }).toString(),
+        }));
+      } else if (path.endsWith('/link:start') ||
+          path.endsWith('/link:complete')) {
+        response.statusCode = 401;
+        response.write(jsonEncode({
+          'error': {'code': 'unauthenticated'}
+        }));
       } else if (path.endsWith('/logout')) {
         response.statusCode = 204;
       } else {
@@ -228,15 +254,32 @@ void main() {
     expect((await second.cached())?.displayName, 'Traveler');
     expect((await db.load('guest'))!.toJson(),
         {'accountId': 'guest', 'displayName': 'Traveler', 'username': null});
-    expect((await second.restore())?.accountId, 'guest');
+    final consent =
+        await second.beginGmailRecovery(redirect, linkAccountId: 'guest');
+    expect(requests.last.$3, 'Bearer next-1');
     final refresh = requests.firstWhere((item) => item.$1.endsWith('/refresh'));
     expect(refresh.$4, {
       'device_token': 'device',
       'device_proof': proof,
       'refresh_token': 'refresh'
     });
+    rejectAccess = true;
+    final callback = redirect.replace(
+        queryParameters: {'state': consent.state, 'code': 'local-code'});
+    await expectLater(
+        second.finishGmailLink('guest', consent, callback),
+        throwsA(isA<AuthFailure>()
+            .having((error) => error.code, 'code', 'gmail_link_restart')));
+    expect(requests.last.$3, 'Bearer next-1');
+    expect(refreshes, 1,
+        reason: 'never rotate and replay a consent completion');
+    final restarted =
+        await second.beginGmailRecovery(redirect, linkAccountId: 'guest');
+    expect(restarted.state, isNot(consent.state));
+    expect(requests.last.$3, 'Bearer next-2');
+    expect((await second.cached())?.accountId, 'guest');
     await second.signOut();
-    expect(requests.last.$3, 'Bearer next');
+    expect(requests.last.$3, 'Bearer next-2');
     expect(requests.last.$4['device_proof'], proof);
     expect(await second.cached(), isNull);
     expect(await db.load('guest'), isNull);
