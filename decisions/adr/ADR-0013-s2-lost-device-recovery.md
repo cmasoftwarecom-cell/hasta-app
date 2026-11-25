@@ -1,0 +1,9 @@
+# ADR-0013: Recover a previously linked account onto a proved installation
+
+Status: proposed in draft PR #2.
+
+- `/auth/recover:start` and `/auth/recover:complete` do not require an account bearer, but require an existing, non-QA installation enrollment and its proof. Recovery is the SPEC §5.5 exception for a lost device only; it is not a Google entry point, account creation, or account linking. Keep the existing Google feature flag off in the example environment.
+- Store a single pending recovery challenge per installation for five minutes. Scope it separately from linking; store the state lookup as a digest and the nonce/PKCE verifier encrypted. Mark the state consumed before exchange, and keep the result encrypted and scoped to the same installation and idempotency key for five minutes. Do not replay credentials for a session that is no longer active. No Google subject/email is exposed in the recovery response or error envelope.
+- Find the existing active account by verified Google subject, never by email. Occupied target installations cannot be merged or overwritten. Under the installation and account locks, retire all old refresh sessions and mark other bindings revoked while activating the target and creating its session. SPEC allows an old binding to persist; retain the revoked row for history, not an active binding that Guest could use to regain access.
+- Reuse the existing tables and expiration sweep; no migration or new retention policy. Rolling back the code and disabling the feature does not reactivate previously revoked credentials or bindings.
+- Flutter repository methods validate a caller-configured HTTPS redirect, Google consent URL and callback state, then store the new session in OS secure storage. This draft does not register a native/app-link callback or add a recovery control to Welcome. Tests use loopback and synthetic Google proofs; end-to-end native browser verification remains open.

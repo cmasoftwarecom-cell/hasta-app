@@ -1,28 +1,13 @@
 import { HttpException, Inject, Injectable } from '@nestjs/common';
-import { Prisma, PrismaClient } from '@prisma/client';
-import { failure, seal, sha, unseal, uuid7 } from '../auth/credentials';
+import { PrismaClient } from '@prisma/client';
+import { failure, seal, sha, uuid7 } from '../auth/credentials';
 import { GuestAuth } from '../auth/service';
 import { GoogleOAuth, googleScopes } from './google-oauth';
+import { consentLock as lock, consentSeconds as ttlSeconds, ConsentSecret as Intent, ConsentTx as Tx,
+  EnrollmentInput as Credentials, loadConsent as load, openConsent as open, storeConsent as save } from './consent-store';
 
-type Tx = Prisma.TransactionClient;
-type Credentials = { device_token: string; device_proof: string };
-type Start = ReturnType<GoogleOAuth['newConsent']>;
-type Intent = Pick<Start, 'nonce' | 'codeVerifier'>;
-const ttlSeconds = 300;
-const expiry = () => new Date(Date.now() + ttlSeconds * 1000);
 const scopeFor = (state: string) => `link-google-state:${sha(state)}`;
-const lock = (tx: Tx, scope: string) => tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${scope}, 0))`;
-const load = (tx: Tx, scope: string, key: string) =>
-  tx.auth_requests.findFirst({ where: { scope, key, expires_at: { gt: new Date() } }, select: { sealed: true, fingerprint: true } });
-const save = async (tx: Tx, scope: string, key: string, fingerprint: string, value: unknown) => {
-  await tx.auth_requests.deleteMany({ where: { scope, key, expires_at: { lte: new Date() } } });
-  await tx.auth_requests.create({ data: { scope, key, fingerprint, sealed: seal(value, `${scope}:${key}:${fingerprint}`), expires_at: expiry() } });
-};
-const open = <T>(row: { sealed: string; fingerprint: string }, scope: string, key: string, fingerprint: string): T => {
-  if (row.fingerprint !== fingerprint) throw failure(409, 'idempotency_conflict');
-  return unseal(row.sealed, `${scope}:${key}:${fingerprint}`) as T;
-};
-export const GOOGLE_LINK = Symbol('GoogleOAuth for authenticated linking');
+export const GOOGLE_LINK = Symbol('GoogleOAuth for identity consent');
 export function googleLinkProvider() {
   let provider: GoogleOAuth | undefined;
   return () => {

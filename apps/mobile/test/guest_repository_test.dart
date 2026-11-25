@@ -23,6 +23,128 @@ class _MemoryCredentials implements CredentialStore {
 }
 
 void main() {
+  test('T30/T37: recovery callback is scoped and stores only the new session',
+      () async {
+    final secure = _MemoryCredentials();
+    final cache = ProfileCache.memory();
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final redirect = Uri.https('callback.example.invalid', '/recover');
+    final state = List.filled(43, 'a').join();
+    final nonce = List.filled(43, 'b').join();
+    final requests = <(String, String?, String?, Document)>[];
+    var mismatchedConsent = true;
+    var retries = 0;
+    server.listen((request) async {
+      final data =
+          jsonDecode(await utf8.decoder.bind(request).join()) as Document;
+      final path = request.uri.path;
+      requests.add((
+        path,
+        request.headers.value('idempotency-key'),
+        request.headers.value('authorization'),
+        data
+      ));
+      final response = request.response;
+      response.headers.contentType = ContentType.json;
+      if (path.endsWith('/register')) {
+        response.write(jsonEncode({'device_token': 'local-device'}));
+      } else if (path.endsWith('/recover:start')) {
+        final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+          'state': state,
+          'nonce': nonce,
+          'redirect_uri': mismatchedConsent
+              ? 'https://wrong.example.invalid/recover'
+              : redirect.toString(),
+          'response_type': 'code',
+          'code_challenge_method': 'S256',
+        });
+        mismatchedConsent = false;
+        response.write(jsonEncode({
+          'state': state,
+          'nonce': nonce,
+          'auth_url': authUrl.toString(),
+          'expires_in': 300,
+        }));
+      } else if (path.endsWith('/recover:complete') && retries++ < 2) {
+        response.statusCode = retries == 1 ? 503 : 409;
+        response.write(jsonEncode({
+          'error': {
+            'code': retries == 1 ? 'unavailable' : 'request_in_progress'
+          }
+        }));
+      } else if (path.endsWith('/recover:complete')) {
+        response.write(jsonEncode({
+          'is_new_account': false,
+          'account': {
+            'id': 'restored-account',
+            'is_guest': false,
+            'display_name': 'Traveler'
+          },
+          'access_token': 'recovered-access',
+          'refresh_token': 'recovered-refresh',
+        }));
+      } else {
+        response.statusCode = 404;
+      }
+      await response.close();
+    });
+    final repository = GuestRepository(
+        baseUrl: 'http://127.0.0.1:${server.port}',
+        credentials: secure,
+        cache: cache,
+        deviceInfo: () async => {
+              'raw_device_id': 'device-identifier',
+              'platform': 'ios',
+              'os_version': '17.0'
+            });
+    addTearDown(repository.close);
+    Matcher errorCode(String code) =>
+        isA<AuthFailure>().having((failure) => failure.code, 'code', code);
+    await expectLater(repository.beginGmailRecovery(redirect),
+        throwsA(errorCode('recovery_consent_invalid')));
+    final consent = await repository.beginGmailRecovery(redirect);
+    expect(consent.state, state);
+    expect(requests[1].$2, requests[2].$2);
+    expect(requests[1].$4['provider'], 'google');
+    expect(requests[1].$4['device_proof'], requests[0].$4['device_proof']);
+    final callback = redirect
+        .replace(queryParameters: {'state': state, 'code': 'local-code'});
+    for (final invalid in [
+      callback.replace(host: 'wrong.example.invalid'),
+      callback.replace(path: '/other'),
+      callback.replace(query: 'state=$state&state=$state&code=local-code'),
+      callback.replace(query: 'state=wrong&code=local-code'),
+    ]) {
+      await expectLater(repository.finishGmailRecovery(consent, invalid),
+          throwsA(errorCode('recovery_callback_invalid')));
+    }
+    await expectLater(
+        repository.finishGmailRecovery(consent,
+            callback.replace(query: 'state=$state&error=access_denied')),
+        throwsA(errorCode('recovery_cancelled')));
+    expect(requests.length, 3);
+    expect(await repository.cached(), isNull);
+    await expectLater(repository.finishGmailRecovery(consent, callback),
+        throwsA(errorCode('unavailable')));
+    await expectLater(repository.finishGmailRecovery(consent, callback),
+        throwsA(errorCode('request_in_progress')));
+    final profile = await repository.finishGmailRecovery(consent, callback);
+    expect(profile.accountId, 'restored-account');
+    expect((await repository.cached())?.displayName, 'Traveler');
+    expect(requests[3].$2, requests[4].$2);
+    expect(requests[3].$2, requests[5].$2);
+    expect(requests[5].$4['code'], 'local-code');
+    expect(requests.every((request) => request.$3 == null), isTrue);
+    expect(secure.values.values.any((value) => value.contains('local-code')),
+        isFalse);
+    expect(
+        secure.values.values
+            .any((value) => value.contains('recovered-refresh')),
+        isTrue);
+    expect((await cache.load('restored-account'))?.displayName, 'Traveler');
+  });
+
   test(
       'T40/T41/T42: proof durability, lost response retry, refresh, cache and logout',
       () async {

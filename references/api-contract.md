@@ -99,8 +99,13 @@ Errors: `409 identity_in_use`, `422 google_email_unverified`, `401 token_expired
 
 ### 1.7 Recovery (old device lost)
 
-`POST /v1/auth/recover:start` — public → `{ "state":"…","nonce":"…","auth_url":"…" }` (Google only in v1)
-`POST /v1/auth/recover:complete` — public → same shape as guest response, plus `"revoked_other_sessions": 3`. If no account matches the identity ⇒ `404 not_found` with copy guiding to guest creation.
+Both writes require `Idempotency-Key` and existing device enrollment (`device_token`, `device_proof`), not an account bearer. No provider sign-in or account creation is offered by these routes.
+
+`POST /v1/auth/recover:start` — `{ "provider":"google", "device_token":"…", "device_proof":"…" }` → `{ "state":"…","nonce":"…","auth_url":"…","expires_in":300 }`.
+
+`POST /v1/auth/recover:complete` — `{ "state":"…", "code":"…", "device_token":"…", "device_proof":"…" }` → same shape as guest response, plus `"revoked_other_sessions": 3` and `is_new_account: false`. State is bound to the enrolled installation and consumed before server-side code exchange. Old sessions and bindings are retired when recovery succeeds. A new installation occupied by a different account is never overwritten.
+
+Errors: `404 not_found` if no active, verified linked account matches (copy guides to guest creation); `401 token_expired` for missing, expired, or consumed state; `409 guest_exists_on_target` / `account_exists_on_target` for occupied installations; `422 google_email_unverified` for a valid Google proof without verified email.
 
 ### 1.8 QR device transfer
 

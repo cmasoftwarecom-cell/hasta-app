@@ -40,6 +40,7 @@ jobs:
           npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           npm run test:smoke
           node --test test/google-link.test.cjs
+          node --test test/gmail-recovery.test.cjs
           node --test test/native-api.test.cjs
       - name: Redis isolation smoke (test index 15)
         env:
