@@ -1,0 +1,8 @@
+# ADR-0014: Native recovery uses a verified HTTPS app callback
+
+Status: proposed in draft PR #2.
+
+- Android App Links and iOS Universal Links accept only `/auth/recovery/callback` on the configured HTTPS host. Native code forwards only that URL to the recovery channel; Flutter checks the pending state, origin, path, duplicate values and expiry before exchange. Do not persist callback URLs or credentials from the browser. If the process dies, restart recovery; no cold callback can finish absent an in-memory intent.
+- Launch the system browser through native platform APIs without adding a dependency. This slice does not implement the SPEC's preferred custom-tab/auth-session UI. It preserves Guest and Privacy on Welcome and exposes the recovery coordinator for a separate, explicit recovery entry. Keep the feature off by default until the full entry, association and device tests are qualified.
+- The local Android test intentionally uses a debug-only registered return scheme to avoid external association infrastructure. Its prepared browser page is served entirely over emulator-reversed loopback, and it uses the real server verifier with ephemeral fixture keys. The test checks actual uninstall/reinstall on a separate emulator, not same-identity guest resume after a restart. The iOS native callback handler is separate from this Android fixture and still needs native verification.
+- No new database schema, dependency, credentials, or recovery bypass in the app server. The mock routes are mounted only by the loopback QA launcher. To roll back, remove the native bridge and its signing/manifest configuration; keep already-revoked server sessions and bindings revoked.
