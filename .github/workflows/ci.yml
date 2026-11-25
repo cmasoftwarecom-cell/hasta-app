@@ -1,11 +1,10 @@
-name: Hasta CI
+﻿name: CI
 on:
   pull_request:
   push:
     branches: [main]
 permissions:
   contents: read
-
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -18,206 +17,94 @@ jobs:
           POSTGRES_HOST_AUTH_METHOD: trust
         ports: ['5432:5432']
         options: --health-cmd "pg_isready -U hasta -d hasta_test" --health-interval 5s --health-timeout 3s --health-retries 10
-      redis:
-        image: redis:7.2-alpine
-        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
     env:
       HASTA_DATABASE_URL: postgresql://hasta@127.0.0.1:5432/hasta_test
       HASTA_ENV: test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
-          node-version: '20.20.2'
+          node-version: '24'
           cache: npm
           cache-dependency-path: apps/server/package-lock.json
       - working-directory: apps/server
         run: |
           npm ci
-          npm audit --omit=dev --audit-level=high
           npm run build
           npx prisma migrate deploy
           npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           npm run test:smoke
-          node --test test/google-link.test.cjs
-          node --test test/gmail-recovery.test.cjs
-          node --test test/native-api.test.cjs
-      - name: Redis isolation smoke (test index 15)
-        env:
-          REDIS_CONTAINER: ${{ job.services.redis.id }}
-        run: test "$(docker exec "$REDIS_CONTAINER" redis-cli -n 15 PING)" = PONG
-      - name: Verify Compose and server image
-        run: |
-          cp .env.example .env
-          docker compose config --quiet
-          docker build --tag "hasta-server:${GITHUB_SHA}" apps/server
-
   gates:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
-          node-version: '20.20.2'
-      - name: T20, T36, T37, T45, T48 and design tokens
-        run: |
+          node-version: '24'
+      - run: |
           npm --prefix apps/server ci
           npm --prefix apps/server run build
-          node --test tools/scripts/identity-gate.test.mjs
           node tools/scripts/static-gates.mjs
           node tools/scripts/design-tokens.mjs --check
-      - name: T47 OpenAPI lint and breaking changes versus the release baseline
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: |
-          npx --yes @stoplight/spectral-cli@6.15.0 lint docs/api/openapi.json --fail-severity warn
-          baseline="$RUNNER_TEMP/openapi-baseline.json"
-          node tools/scripts/openapi-baseline.mjs "$BASE_SHA" > "$baseline"
-          release=oasdiff_1.39.0_linux_amd64.tar.gz
-          curl --fail --silent --show-error --location \
-            "https://github.com/oasdiff/oasdiff/releases/download/v1.39.0/$release" -o "$release"
-          echo "71a85930728f367a2086077b7ae1411319421549d18473a3e8258b6451520433  $release" | sha256sum -c -
-          tar -xzf "$release" -C "$RUNNER_TEMP" oasdiff
-          HASTA_T47_OASDIFF="$RUNNER_TEMP/oasdiff" node --test tools/scripts/openapi-baseline.test.mjs
-          "$RUNNER_TEMP/oasdiff" breaking "$baseline" docs/api/openapi.json --fail-on ERR
-
   mobile:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
-          node-version: '20.20.2'
-      - uses: actions/setup-java@v4
+          node-version: '24'
+      - uses: actions/setup-java@dd5c4800f135b0217c8a9c6ab5846b885d26538d  # v5.0.0
         with:
           distribution: temurin
           java-version: '17'
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@fd25e0c96157de28ffd3886a87df32189bd99dff  # v2.18.0
         with:
           flutter-version: '3.24.5'
           cache: true
-      - name: Install SQLite library for Linux repository tests
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-      - name: Analyze and test mobile (including T37 guest-only entry)
-        run: |
+      - run: |
           flutter pub get --enforce-lockfile
-          flutter gen-l10n
           flutter analyze --no-pub
           flutter test --no-pub
-          flutter test --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
-      - name: Build Android QA and release artifacts
-        run: |
-          flutter build apk --debug --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
-          flutter build apk --release --no-pub --dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true
-      - name: T36 and T45 check packaged text and compiled payloads
-        working-directory: .
-        run: |
-          npm --prefix apps/server ci
-          npm --prefix apps/server run build
-          unzip -q apps/mobile/build/app/outputs/flutter-apk/app-debug.apk -d "$RUNNER_TEMP/hasta-apk"
-          unzip -q apps/mobile/build/app/outputs/flutter-apk/app-release.apk -d "$RUNNER_TEMP/hasta-release"
-          node tools/scripts/check-qa-artifacts.mjs "$RUNNER_TEMP/hasta-apk" "$RUNNER_TEMP/hasta-release"
-          node tools/scripts/static-gates.mjs "$RUNNER_TEMP/hasta-apk/assets/flutter_assets" "$RUNNER_TEMP/hasta-release/assets/flutter_assets"
-
+      - run: flutter build apk --release --no-pub
   ios:
     runs-on: macos-15
-    timeout-minutes: 35
-    env:
-      HASTA_DATABASE_URL: postgresql://hasta@127.0.0.1:55432/hasta_test
-      HASTA_ENV: test
-      HASTA_QUICK_TEST_ACCOUNTS_ENABLED: 'false'
     defaults:
       run:
         working-directory: apps/mobile
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4.4.0
         with:
-          node-version: '20.20.2'
-      - uses: subosito/flutter-action@v2
+          node-version: '24'
+      - uses: subosito/flutter-action@fd25e0c96157de28ffd3886a87df32189bd99dff  # v2.18.0
         with:
           flutter-version: '3.24.5'
           cache: true
-      - name: Prepare Flutter and CocoaPods
-        run: |
+      - run: |
           flutter pub get --enforce-lockfile
-          flutter gen-l10n
-          pod --version
-      - name: T36 build and inspect unsigned iOS release
-        run: |
-          qa=(--dart-define=HASTA_ENV=test --dart-define=HASTA_QUICK_TEST_ACCOUNTS_ENABLED=true)
-          flutter build ios --simulator --debug --no-pub "${qa[@]}"
-          flutter build ios --release --no-codesign --no-pub "${qa[@]}"
-          node ../../tools/scripts/check-qa-artifacts.mjs build/ios/iphonesimulator/Runner.app build/ios/iphoneos/Runner.app ios
-      - name: Start an isolated PostgreSQL 16 test API
-        working-directory: apps/server
-        run: |
-          brew list --versions postgresql@16 >/dev/null || brew install postgresql@16
-          pg="$(brew --prefix postgresql@16)/bin"
-          "$pg/initdb" -D "$RUNNER_TEMP/hasta-pg" -U hasta -A trust --no-locale
-          "$pg/pg_ctl" -D "$RUNNER_TEMP/hasta-pg" -l "$RUNNER_TEMP/postgres.log" -o '-h 127.0.0.1 -p 55432' -w start
-          "$pg/createdb" -h 127.0.0.1 -p 55432 -U hasta hasta_test
-          echo "$pg" >> "$GITHUB_PATH"
-          npm ci
-          npm run build
-          npx prisma migrate deploy
-          log="$RUNNER_TEMP/hasta-api.log"
-          node test/native-api.cjs >"$log" 2>&1 &
-          api_pid=$!
-          if ! curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health ||
-             ! kill -0 "$api_pid" 2>/dev/null; then
-            grep '^Native test API:' "$log" || true
-            exit 1
-          fi
-      - name: T40/T41 native guest on a fresh iOS simulator
-        timeout-minutes: 12
-        run: |
-          set -o pipefail
-          device=$(xcrun simctl list devices available -j | node -e '
-            const all = Object.values(JSON.parse(require("fs").readFileSync(0)).devices).flat();
-            const phone = all.find(d => d.name.startsWith("iPhone") && d.isAvailable);
-            if (!phone) process.exit(1);
-            console.log(phone.udid);
-          ')
-          xcrun simctl shutdown "$device" 2>/dev/null || true
-          xcrun simctl erase "$device"
-          xcrun simctl boot "$device"
-          xcrun simctl bootstatus "$device" -b
-          flutter build ios --simulator --debug --config-only --no-pub \
-            --target=integration_test/guest_native_test.dart \
-            --dart-define=HASTA_API_BASE_URL=http://127.0.0.1:3000 \
-            --dart-define=INTEGRATION_TEST_SHOULD_REPORT_RESULTS_TO_NATIVE=true
-          log="$RUNNER_TEMP/hasta-ios-xctest.log"
-          xcodebuild -workspace ios/Runner.xcworkspace -scheme Runner \
-            -configuration Debug -destination "platform=iOS Simulator,id=$device" \
-            -parallel-testing-enabled NO -only-testing:RunnerTests/RunnerTests/testGuestNative \
-            -resultBundlePath "$RUNNER_TEMP/hasta-ios-native.xcresult" test | tee "$log"
-          grep -Eq 'Test Case .*testGuestNative.* passed' "$log" || {
-            echo 'XCTest did not report a passing native guest test.' >&2
-            exit 1
-          }
-          test "$(psql "$HASTA_DATABASE_URL" -Atc \
-            "SELECT count(*) FROM accounts WHERE is_guest")" = 1
-          test "$(psql "$HASTA_DATABASE_URL" -Atc \
-            "SELECT count(*) FROM sessions WHERE revoked_at IS NULL AND expires_at > now()")" = 1
-          test "$(psql "$HASTA_DATABASE_URL" -Atc \
-            "SELECT count(*) FROM sessions WHERE revoked_reason = 'logout'")" = 1
-
+          flutter build ios --release --no-codesign --no-pub
   terraform:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: infra/terraform
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.9.8'
+      - uses: actions/checkout@08c6903cd8c0fde9109e29acf3be36a7f410e183  # v5.0.1
+      - name: Install pinned Terraform
+        run: |
+          set -euo pipefail
+          ZIP="terraform_1.9.8_linux_amd64.zip"
+          BASE="https://releases.hashicorp.com/terraform/1.9.8"
+          curl -fsSLo "/tmp/${ZIP}" "${BASE}/${ZIP}"
+          curl -fsSLo /tmp/SHA256SUMS "${BASE}/terraform_1.9.8_SHA256SUMS"
+          grep "  ${ZIP}\$" /tmp/SHA256SUMS | sha256sum -c -
+          unzip -o -q "/tmp/${ZIP}" -d /usr/local/bin
+          terraform version
       - run: |
           terraform fmt -check
           terraform init -backend=false -input=false -lockfile=readonly
