@@ -23,6 +23,7 @@ class _ObservedGuestRepository extends GuestRepository {
         'validation_failed',
         'unauthenticated',
         'internal_error',
+        'unavailable',
         'rate_limited',
         'device_cooldown',
         'idempotency_conflict',

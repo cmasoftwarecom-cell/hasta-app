@@ -39,6 +39,7 @@ jobs:
           npx prisma migrate deploy
           npx prisma migrate diff --from-url "$HASTA_DATABASE_URL" --to-schema-datamodel prisma/schema.prisma --exit-code
           npm run test:smoke
+          node --test test/native-api.test.cjs
       - name: Redis isolation smoke (test index 15)
         env:
           REDIS_CONTAINER: ${{ job.services.redis.id }}
@@ -156,14 +157,14 @@ jobs:
           npm ci
           npm run build
           npx prisma migrate deploy
-          set -a
-          source <(sed -n '/^HASTA_.*_TTL_SECONDS=/p; /^HASTA_.*_PER_HOUR=/p' ../../.env.example)
-          export HASTA_DEVICE_PEPPER="$(openssl rand -hex 32)"
-          export HASTA_AUTH_SECRET="$(openssl rand -hex 32)"
-          set +a
-          node -e "require('./dist/main').createApp().then(app => app.listen(3000, '127.0.0.1'))" \
-            >"$RUNNER_TEMP/hasta-api.log" 2>&1 &
-          curl --fail --silent --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health
+          log="$RUNNER_TEMP/hasta-api.log"
+          node test/native-api.cjs >"$log" 2>&1 &
+          api_pid=$!
+          if ! curl --fail --silent --show-error --retry 15 --retry-connrefused --retry-delay 1 http://127.0.0.1:3000/health ||
+             ! kill -0 "$api_pid" 2>/dev/null; then
+            grep '^Native test API:' "$log" || true
+            exit 1
+          fi
       - name: T40/T41 native guest on a fresh iOS simulator
         run: |
           device=$(xcrun simctl list devices available -j | node -e '
