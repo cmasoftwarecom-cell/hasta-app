@@ -7,7 +7,7 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.1`
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-24` by `agent` on `feature/HAS-1a-guest-auth`
+- updated: `2026-11-25` by `agent` on `feature/HAS-1a-guest-auth`
 
 ## Position
 - current sprint: `S1 — guest auth` (five review fixes implemented in draft PR #2)
@@ -20,6 +20,8 @@
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints the typed S1 OpenAPI contract; there is no prior release tag to diff.
 
 ## Open test IDs
+The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
+
 `T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API. The first native run did not reach the guest profile; the [diagnostic rerun](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45393944704/job/138444624882) timed out while loading the test suite after building the app, so it did not verify either ID. `T36` passed the iOS debug/unsigned release artifact comparison. Deployed staging QA is separate: HTTPS `/health` has not been verified, and no staging fixtures were seeded. See the [origin runbook and 12 checks](../docs/qa/s1-staging.md). Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
 
 ## Imported decisions (not all present on this branch)
