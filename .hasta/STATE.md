@@ -7,7 +7,7 @@
 - SPEC: `1.0.1`            <!-- bump with: Hasta spec bump 1.0.2 -->
 - DS: `1.0.2` (canonical DTCG)
 - app: `1.0.0` build `1` · API `/v1`
-- updated: `2026-11-25` by `agent` for `P0-DESIGN-TOKENS-GATE`
+- updated: `2026-11-25` by `agent` on `fix/flutter-ci-sdk`
 
 ## Position
 - current sprint: `S2 — Gmail linking and device change` (linking, sessions and recovery core, Android T30 harness, QR transfer core and opt-in Android debug QR display/scanner with a physical-device T28 harness; sprint remains open)
@@ -27,7 +27,9 @@ P1-T37-MOBILE-GATE adds a CI widget allowlist of unauthenticated accessibility t
 
 T46 exercises an active refresh token on a different enrolled binding and checks HTTP 401, committed revocation of the entire family, and survival of unrelated sessions in isolated PostgreSQL 16.
 
-P0-DESIGN-TOKENS-GATE: `assets/design-tokens.json` is the canonical DS 1.0.2 DTCG source. The Section 2.3 gate was RED before the fix; committed fixtures reject a misplaced source, broken/circular aliases, missing brand states, low Myanmar line height, missing Myanmar fonts, missing CI wiring and generated Dart drift. A hard-coded pressed fill failed the static and EN/MM widget checks; removing the workflow check failed the CI wiring fixture. DTCG fills replace the old opacity overrides; legacy theme variants, spacing and text roles not supplied by DTCG remain compatibility data. Clean hosted Flutter jobs remain blocked separately by `intl 0.20.3` with the pinned Flutter 3.24.5 SDK.
+P0-DESIGN-TOKENS-GATE: `assets/design-tokens.json` is the canonical DS 1.0.2 DTCG source. The Section 2.3 gate was RED before the fix; committed fixtures reject a misplaced source, broken/circular aliases, missing brand states, low Myanmar line height, missing Myanmar fonts, missing CI wiring and generated Dart drift. A hard-coded pressed fill failed the static and EN/MM widget checks; removing the workflow check failed the CI wiring fixture. DTCG fills replace the old opacity overrides; legacy theme variants, spacing and text roles not supplied by DTCG remain compatibility data.
+
+P1-FLUTTER-CI-SDK: dependency resolution failed with `intl 0.20.3` on the pinned Flutter 3.24.5/Dart 3.5.4 SDK. Restored the SDK's `intl 0.19.0` pin and the corresponding app lockfile; Flutter and the CI lockfile checks are unchanged. Restored the ADR-0009 minimum Android API 23 instead of inheriting Flutter's API 21 default; the new static check was RED on the inherited setting and GREEN on the explicit pin. Strict resolution, localization generation, analysis, and 35 Flutter tests in each local configuration passed. This does not grant native or staging QA credit.
 
 The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
 
