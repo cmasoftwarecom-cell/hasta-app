@@ -63,21 +63,19 @@ jobs:
           node --test tools/scripts/identity-gate.test.mjs
           node tools/scripts/static-gates.mjs
           node tools/scripts/design-tokens.mjs --check
-      - name: T47 OpenAPI lint and breaking changes versus previous release
+      - name: T47 OpenAPI lint and breaking changes versus the release baseline
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           npx --yes @stoplight/spectral-cli@6.15.0 lint docs/api/openapi.json --fail-severity warn
-          tag=$(git tag --merged HEAD --list 'v[0-9]*' --sort=-version:refname | head -1)
-          if [ -z "$tag" ]; then
-            echo 'S0 baseline: no previous API release tag.'
-            exit 0
-          fi
           baseline="$RUNNER_TEMP/openapi-baseline.json"
-          git show "${tag}:docs/api/openapi.json" > "$baseline"
+          node tools/scripts/openapi-baseline.mjs "$BASE_SHA" > "$baseline"
           release=oasdiff_1.39.0_linux_amd64.tar.gz
           curl --fail --silent --show-error --location \
             "https://github.com/oasdiff/oasdiff/releases/download/v1.39.0/$release" -o "$release"
           echo "71a85930728f367a2086077b7ae1411319421549d18473a3e8258b6451520433  $release" | sha256sum -c -
           tar -xzf "$release" -C "$RUNNER_TEMP" oasdiff
+          HASTA_T47_OASDIFF="$RUNNER_TEMP/oasdiff" node --test tools/scripts/openapi-baseline.test.mjs
           "$RUNNER_TEMP/oasdiff" breaking "$baseline" docs/api/openapi.json --fail-on ERR
 
   mobile:
