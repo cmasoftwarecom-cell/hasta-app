@@ -20,6 +20,8 @@
 `T20`, `T36`, `T37`, `T45`, `T47`, `T48` and design token checks. S1 adds `T40` guest app/repository and server lifecycle tests, plus `T41`, `T42`, and `T46` HTTP/DB tests. `T36` adds default/opted-in widget checks and a QA-positive Android debug APK vs release APK check. `T47` lints the typed S1 OpenAPI contract; there is no prior release tag to diff.
 
 ## Open test IDs
+T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. The CI entry point fails closed on linking/recovery completion or raw ID-token verification until S2 wires the real server verifier; S1 adds no Google routes, dependency, or runtime integration.
+
 The S1 T40 widget suite includes a local 320×568, 200%-text-scale regression for English and Myanmar Guest Profile and Settings. The title row grows beyond its token-based minimum and the profile copy wraps without a line cap. This is separate from native and staging QA.
 
 `T40/T41` iOS Simulator uses real device-channel, Keychain and HTTP code against an isolated PostgreSQL 16 API. The first native run did not reach the guest profile; the [diagnostic rerun](https://github.com/cmasoftwarecom-cell/hasta-app/actions/runs/45393944704/job/138444624882) timed out while loading the test suite after building the app, so it did not verify either ID. `T36` passed the iOS debug/unsigned release artifact comparison. Deployed staging QA is separate: HTTPS `/health` has not been verified, and no staging fixtures were seeded. See the [origin runbook and 12 checks](../docs/qa/s1-staging.md). Physical-device and signed distribution testing are not implied. · `T25–T30`, `T38–T39`, `T43–T44` (S2) · `T15–T18` (later).
@@ -47,7 +49,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta staging QA
+Hasta fix T46
 ```
 
 ## Changelog (append one line per merged PR)
