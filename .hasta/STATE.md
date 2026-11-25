@@ -51,6 +51,8 @@ S2 local build verification: Flutter analysis and 22 tests passed in both defaul
 
 P0-QR-ROLLOUT-GATE: The regular server cannot enable QR transfer via its feature flag. ADR-0015 now requires explicit native QR QA launcher opt-in, `HASTA_ENV=test`, a loopback HTTP listener, and a disposable loopback `hasta_test` PostgreSQL URL. T27 rollout regression covers all six transfer endpoints in blocked configurations and retains the existing positive local transfer journey. Server-verifiable hardware approval and native T28 remain open.
 
+P1-QR-BACK-CANCEL: Android Back and Close now share the sender's rejection path for a live, unsigned offer. The QR disappears immediately; a failed rejection leaves the screen open to retry without regenerating it. T27 widget regressions cover waiting, repeated Back while in flight, and retry via Close. See ADR-0016; physical T28 remains open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -81,7 +83,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix P1-QR-BACK-CANCEL
+Hasta fix P1-QR-CLAIM-EXPIRY
 ```
 
 ## Changelog (append one line per merged PR)

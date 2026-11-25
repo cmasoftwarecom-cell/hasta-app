@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ class _Session extends GuestRepository {
   GuestProfile? profile;
   int guests = 0;
   bool scanned = false;
+  Future<void> Function()? reject;
   final expires =
       DateTime.timestamp().add(const Duration(seconds: 120)).toIso8601String();
 
@@ -56,6 +58,13 @@ class _Session extends GuestRepository {
     expect(approval.id, _id);
     order.add('confirmed');
     profile = null;
+  }
+
+  @override
+  Future<void> rejectDeviceTransfer(TransferOffer offer) async {
+    expect(offer.id, _id);
+    order.add('reject');
+    await reject?.call();
   }
 
   @override
@@ -113,6 +122,60 @@ class _Surface extends NativeQrSurface {
 }
 
 void main() {
+  for (final failFirst in [false, true]) {
+    testWidgets(
+        failFirst
+            ? 'T27 Back retains failed cancellation, and Close retries it'
+            : 'T27 Back hides the QR and waits for exactly one rejection',
+        (tester) async {
+      final order = <String>[];
+      final response = Completer<void>();
+      final session = _Session(order, _profile)..reject = () => response.future;
+      addTearDown(session.close);
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(HastaApp(
+          session: session,
+          locale: const Locale('en'),
+          transferSurface: _Surface(order)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Settings'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change device'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Show transfer QR'));
+      await tester.pumpAndSettle();
+      final qr =
+          find.bySemanticsLabel('Transfer QR. Scan it using your new device.');
+      expect(qr, findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(order.where((event) => event == 'reject'), hasLength(1));
+      expect(qr, findsNothing);
+      expect(find.text('Close'), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      expect(order.where((event) => event == 'reject'), hasLength(1));
+      if (failFirst) {
+        response.completeError(const AuthFailure('network', offline: true));
+        await tester.pumpAndSettle();
+        expect(find.text('Close'), findsOneWidget);
+        expect(find.text('Try again'), findsNothing);
+        expect(qr, findsNothing);
+        session.reject = () async {};
+        await tester.tap(find.text('Close'));
+      } else {
+        response.complete();
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('Close'), findsNothing);
+      expect(find.text('Sign out'), findsOneWidget);
+      expect(order.where((event) => event == 'reject'),
+          hasLength(failFirst ? 2 : 1));
+      expect(order, isNot(contains('confirmed')));
+      semantics.dispose();
+    });
+  }
+
   testWidgets('T25/T27/T28 sender fails closed and hides QR after optical scan',
       (tester) async {
     final order = <String>[];

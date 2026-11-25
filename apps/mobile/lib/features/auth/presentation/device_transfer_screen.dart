@@ -44,6 +44,7 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
   AuthFailure? _error;
   bool _busy = false;
   bool _polling = false;
+  bool _cancelling = false;
   bool _foreground = true;
   bool _done = false;
   int _ticks = 0;
@@ -156,6 +157,7 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
     if (!_foreground ||
         _busy ||
         _polling ||
+        _cancelling ||
         _done ||
         _deadline == null ||
         _expired) return;
@@ -211,9 +213,14 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
 
   Future<void> _cancel() => _run(() async {
         final offer = _offer;
+        _cancelling = true;
         _matrix = null;
         if (offer != null && !_expired && _signed == null) {
-          await widget.repository.rejectDeviceTransfer(offer);
+          try {
+            await widget.repository.rejectDeviceTransfer(offer);
+          } on AuthFailure catch (error) {
+            if (error.code != 'token_expired') rethrow;
+          }
         }
         if (mounted) Navigator.of(context).pop();
       });
@@ -270,7 +277,7 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
             null when widget.receiving => copy.transferReceiveHelp,
             null => copy.transferSendHelp,
           };
-    final action = terminal
+    final action = terminal || _cancelling
         ? null
         : widget.receiving
             ? _receipt != null
@@ -291,8 +298,11 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
                                       .encode(_offer!.qrPayload);
                                 })
                             : () => _run(_check);
-    return PopScope(
-      canPop: !_busy && !_polling,
+    return PopScope<TransferResult>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_cancel());
+      },
       child: Scaffold(
         appBar: AppBar(
           title:
