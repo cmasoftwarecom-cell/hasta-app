@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { gunzipSync } from 'node:zlib';
 import { test } from 'node:test';
 
@@ -13,6 +15,23 @@ const script = fileURLToPath(new URL('tools/scripts/deploy-staging.sh', repo));
 const sha = 'a'.repeat(40);
 const previous = 'b'.repeat(40);
 const url = 'https://api-staging.hasta.app';
+
+test('staging verifier requires HTTP 200 even when non-200 responses have correct JSON', async (t) => {
+  const server = createServer((req, res) => {
+    res.writeHead(Number(req.url.split('/')[1]), { Location: '/200/health' });
+    res.end(JSON.stringify({ status: 'ok', env: 'staging', commit: sha }));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const check = status => promisify(execFile)('bash', ['-c', `
+    dig(){ echo 127.0.0.1; }
+    curl(){ if [[ $1 == -sSv ]]; then echo '* SSL certificate verify ok.' >&2; else command curl "$@"; fi; }
+    export -f dig curl
+    exec bash docs/repo-ready/verify-staging.sh "$1" "$2"
+  `, 'fixture', `http://127.0.0.1:${server.address().port}/${status}`, sha]);
+  assert.match((await check(200)).stdout, /PASS: staging/);
+  for (const status of [302, 202, 503]) await assert.rejects(check(status), new RegExp(`expected HTTP 200, got ${status}`));
+});
 
 test('staging deploy wires the server image build to the protected manual job', () => {
   assert.match(workflow, /workflow_dispatch:/);
@@ -73,7 +92,7 @@ sh -c "$command" < "$input"
 if [[ "$1" == -sSv ]]; then echo '* SSL certificate verify ok.' >&2; exit; fi
 cp "$RUNNER_TEMP/remote/CURRENT" "$RUNNER_TEMP/current-during-health"
 [[ \${FAIL_HEALTH:-0} == 0 ]] || exit 22
-printf '{"status":"ok","env":"staging","commit":"%s"}\\n' "$BAKED"`,
+printf '{"status":"ok","env":"staging","commit":"%s"}\\n%s' "$BAKED" "\${HTTP_CODE:-200}"`,
   })) writeFileSync(join(dir, name), `#!/usr/bin/env bash\nset -eu\n${body}\n`, { mode: 0o700 });
   writeFileSync(join(dir, 'api.env'), 'HASTA_ENV=staging\n');
   for (const sub of ['container-state', 'remote']) mkdirSync(join(dir, sub));
@@ -132,11 +151,11 @@ test('staging deploy leaves the current container untouched if the remote docker
   assert.equal(readFileSync(join(dir, 'remote/CURRENT'), 'utf8'), `${previous}\n`);
 });
 
-for (const failure of ['FAIL_RUN', 'FAIL_HEALTH']) {
+for (const [failure, value] of [['FAIL_RUN', '1'], ['FAIL_HEALTH', '1'], ['HTTP_CODE', '302']]) {
   test(`staging deploy restores last verified release on ${failure}`, (t) => {
     const { dir, archive, run } = fixture(t);
     assert.equal(run(['build', sha, 'deployment-source', archive]).status, 0);
-    assert.notEqual(run(['ship', sha, archive, url], { [failure]: '1' }).status, 0);
+    assert.notEqual(run(['ship', sha, archive, url], { [failure]: value }).status, 0);
     assert.equal(readFileSync(join(dir, 'remote/CURRENT'), 'utf8'), `${previous}\n`);
     assert.equal(readFileSync(join(dir, 'container-state/hasta-api'), 'utf8'), 'old-container');
     assert.match(readFileSync(join(dir, 'docker.log'), 'utf8'), /rm -f candidate\n[\s\S]*start old-container\n/);

@@ -23,7 +23,7 @@
 ## Open test IDs
 P1-STAGING-DEPLOY-WORKFLOW (verification guide §1): the manual workflow builds from `apps/server` on a revision already in `main`, verifies its baked SHA, transfers and loads the archive over host-key-pinned SSH, and calls the tracked HTTPS verifier. Deploy only after the [staging health contract in PR #5](https://github.com/cmasoftwarecom-cell/hasta-app/pull/5) lands. The isolated regression uses synthetic archives; no deployment or live staging QA was run.
 
-P1-STAGING-ROLLBACK: cutover retains the previous container, restores it if candidate startup or public verification fails, and advances `CURRENT` only after the verifier passes. Isolated fixtures cover start failure, verifier failure and successful commit. P1-STAGING-HEALTH-STATUS is separate and remains open.
+P1-STAGING-ROLLBACK: cutover retains the previous container, restores it if candidate startup or public verification fails, and advances `CURRENT` only after the verifier passes. P1-STAGING-HEALTH-STATUS: the verifier requires exact HTTP 200 and matching staging JSON from the same response. Loopback covers 200, 202, 302 and 503; the cutover fixture confirms a 302 rolls back. Live staging remains unverified.
 
 T37 uses a route and identity-module boundary check with local behavioural fixtures for signature, issuer, audience, expiry, nonce, and verified email. S1 had no Google runtime integration. S2 wires the server verifier into the existing fail-closed gate and uses locally signed tokens; HTTP tests map T37/T38/T39 for authenticated linking, no merge, and server proof verification. The sessions tests cover account scope, family revocation, current-session replay, and other-device revocation. These do not qualify the S2 mobile or recovery gates.
 

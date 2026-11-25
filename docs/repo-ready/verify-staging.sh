@@ -12,7 +12,10 @@ if dig +short A "$HOST" | grep -q 'trycloudflare\|^$'; then
 fi
 
 echo "2) TLS  -> $(curl -sSv -o /dev/null --max-time 10 "$BASE/health" 2>&1 | grep -E 'SSL cert|subject:' | head -2)"
-BODY="$(curl -fsS --fail-with-body --max-time 15 "$BASE/health")"
+RESPONSE="$(curl -q -sS --max-time 15 --write-out $'\n%{http_code}' "$BASE/health")"
+HTTP_STATUS="${RESPONSE##*$'\n'}"
+[[ $HTTP_STATUS == 200 ]] || { printf 'FAIL: expected HTTP 200, got %s\n' "$HTTP_STATUS" >&2; exit 1; }
+BODY="${RESPONSE%$'\n'*}"
 echo "3) body -> $BODY"
 
 HAVE="$(printf '%s' "$BODY" | jq -r '.commit // empty')"
