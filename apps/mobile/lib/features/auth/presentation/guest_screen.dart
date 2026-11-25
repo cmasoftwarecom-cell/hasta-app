@@ -33,6 +33,7 @@ class _GuestScreenState extends State<GuestScreen> {
   bool _busy = true;
   bool _settings = false;
   bool _linkedAccounts = false, _gmailReady = false, _connectingGmail = false;
+  bool _submittingGmail = false;
   String? _maskedGmail;
   Timer? _press;
   Future<void> Function()? _retry;
@@ -164,15 +165,39 @@ class _GuestScreenState extends State<GuestScreen> {
         });
         try {
           _maskedGmail = connect
-              ? await gmail.connect(account)
+              ? await gmail.connect(account, onSubmitting: () {
+                  if (mounted) setState(() => _submittingGmail = true);
+                })
               : await gmail.status(account);
           _gmailReady = true;
-        } on AuthFailure catch (error) {
-          if (error.code != 'recovery_cancelled') rethrow;
+        } catch (error) {
+          if (!mounted ||
+              (error is AuthFailure && error.code == 'recovery_cancelled')) {
+            return;
+          }
+          if (!_submittingGmail || !_gmailResultUncertain(error)) rethrow;
+          // A missing completion reply does not mean the server failed.
+          _gmailReady = false;
+          try {
+            _maskedGmail = await gmail.status(account);
+          } catch (_) {
+            // Keep Connect disabled until an explicit status check succeeds.
+          }
+          if (_maskedGmail == null) {
+            throw const AuthFailure('gmail_link_status_unknown');
+          }
+          _gmailReady = true;
         } finally {
-          _connectingGmail = false;
+          _submittingGmail = _connectingGmail = false;
         }
       });
+
+  bool _gmailResultUncertain(Object error) => switch (error) {
+        AuthFailure(code: 'gmail_link_restart' || 'token_expired') => false,
+        AuthFailure(code: 'request_in_progress') => true,
+        AuthFailure(:final status) => status == null || status >= 500,
+        _ => true,
+      };
 
   void _backFromSettings() {
     setState(() {
@@ -316,14 +341,19 @@ class _GuestScreenState extends State<GuestScreen> {
                                     failure?.status == 404 ||
                                     failure?.code == 'configuration'
                                 ? null
-                                : () => _gmail(connect: true),
+                                : () {
+                                    if (!_busy) _gmail(connect: true);
+                                  },
                             child: Text(copy.connectGmail),
                           ),
                         ],
                       ),
                     ),
                   ],
-                  if (_connectingGmail)
+                  if (_submittingGmail)
+                    Semantics(
+                        liveRegion: true, child: Text(copy.gmailFinishing))
+                  else if (_connectingGmail)
                     TextButton(
                         onPressed: widget.gmail!.cancel,
                         child: Text(copy.gmailCancel)),
@@ -369,6 +399,8 @@ class _GuestScreenState extends State<GuestScreen> {
                       child: Text(switch (failure) {
                         AuthFailure(offline: true) => copy.offline,
                         AuthFailure(code: 'identity_in_use') => copy.gmailInUse,
+                        AuthFailure(code: 'gmail_link_status_unknown') =>
+                          copy.gmailStatusUnknown,
                         AuthFailure(
                           code: 'gmail_link_restart' || 'token_expired'
                         )
@@ -383,7 +415,9 @@ class _GuestScreenState extends State<GuestScreen> {
                     TextButton(
                         onPressed: () =>
                             _linkedAccounts ? _gmail() : _run(retry),
-                        child: Text(copy.retry)),
+                        child: Text(failure.code == 'gmail_link_status_unknown'
+                            ? copy.gmailCheckStatus
+                            : copy.retry)),
                 ],
                 if (profile == null) ...[
                   Semantics(

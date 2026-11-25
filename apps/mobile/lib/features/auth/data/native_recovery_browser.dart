@@ -102,7 +102,8 @@ class NativeRecoveryBrowser {
 abstract interface class GmailLinkActions {
   Stream<bool> get networkAvailable;
   Future<String?> status(String accountId);
-  Future<String> connect(String accountId);
+  Future<String> connect(String accountId,
+      {required void Function() onSubmitting});
   void cancel();
 }
 
@@ -112,6 +113,7 @@ class GmailLinkFlow implements GmailLinkActions {
   final GuestRepository repository;
   final browser = NativeRecoveryBrowser();
   int _attempt = 0;
+  bool _submitting = false;
 
   @override
   late final Stream<bool> networkAvailable =
@@ -124,7 +126,8 @@ class GmailLinkFlow implements GmailLinkActions {
   Future<String?> status(String accountId) => repository.linkedGmail(accountId);
 
   @override
-  Future<String> connect(String accountId) async {
+  Future<String> connect(String accountId,
+      {required void Function() onSubmitting}) async {
     final attempt = ++_attempt;
     void requireActive() {
       if (attempt != _attempt) throw const AuthFailure('recovery_cancelled');
@@ -136,11 +139,18 @@ class GmailLinkFlow implements GmailLinkActions {
     requireActive();
     final callback = await browser.authorize(consent);
     requireActive();
-    return repository.finishGmailLink(accountId, consent, callback);
+    _submitting = true;
+    try {
+      onSubmitting();
+      return await repository.finishGmailLink(accountId, consent, callback);
+    } finally {
+      _submitting = false;
+    }
   }
 
   @override
   void cancel() {
+    if (_submitting) return;
     _attempt++;
     browser.cancel();
   }

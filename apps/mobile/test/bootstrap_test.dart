@@ -49,28 +49,43 @@ class _GmailActions implements GmailLinkActions {
   bool offline = true;
   bool expireFirstAttempt = true;
   String? connectedAccount;
+  Completer<void>? consent;
+  Completer<String>? completion;
+  String? linkedEmail;
+  int statusReads = 0;
+  int submissions = 0;
 
   @override
   Stream<bool> get networkAvailable => network.stream;
 
   @override
   Future<String?> status(String accountId) async {
+    statusReads++;
     if (offline) throw const AuthFailure('network', offline: true);
-    return null;
+    return linkedEmail;
   }
 
   @override
-  Future<String> connect(String accountId) async {
+  Future<String> connect(String accountId,
+      {required void Function() onSubmitting}) async {
     if (expireFirstAttempt) {
       expireFirstAttempt = false;
       throw const AuthFailure('gmail_link_restart');
     }
+    if (consent case final pending?) await pending.future;
+    onSubmitting();
+    submissions++;
     connectedAccount = accountId;
+    if (completion case final pending?) return pending.future;
     return 'a***@example.invalid';
   }
 
   @override
-  void cancel() {}
+  void cancel() {
+    if (consent case final pending? when !pending.isCompleted) {
+      pending.completeError(const AuthFailure('recovery_cancelled'));
+    }
+  }
 }
 
 void main() {
@@ -145,6 +160,66 @@ void main() {
   });
 
   for (final language in ['en', 'my']) {
+    testWidgets('T37: Cancel only before Gmail submission ($language)',
+        (tester) async {
+      final copy = await AppLocalizations.delegate.load(Locale(language));
+      final gmail = _GmailActions()
+        ..offline = false
+        ..expireFirstAttempt = false
+        ..consent = Completer<void>();
+      addTearDown(gmail.network.close);
+      await tester.pumpWidget(HastaApp(
+          session: _GuestSession(), locale: Locale(language), gmail: gmail));
+      await tester.pumpAndSettle();
+      for (final target in [
+        find.text(copy.welcomeContinue),
+        find.byTooltip(copy.settings),
+        find.text(copy.linkedAccounts),
+      ]) {
+        await tester.tap(target);
+        await tester.pumpAndSettle();
+      }
+      gmail.network.add(true);
+      await tester.pumpAndSettle();
+      final connect = find.widgetWithText(FilledButton, copy.connectGmail);
+      final cancel = find.text(copy.gmailCancel);
+      await tester.tap(connect);
+      await tester.pump();
+      expect(cancel, findsOneWidget);
+      await tester.tap(cancel);
+      await tester.pumpAndSettle();
+      expect(gmail.connectedAccount, isNull);
+
+      gmail.consent = Completer<void>();
+      gmail.completion = Completer<String>();
+      await tester.tap(connect);
+      await tester.pump();
+      gmail.consent!.complete();
+      await tester.pump();
+      expect(gmail.connectedAccount, 'guest');
+      expect(cancel, findsNothing);
+      expect(find.text(copy.gmailFinishing), findsOneWidget);
+      expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+
+      const masked = 'a***@example.invalid';
+      if (language == 'en') gmail.linkedEmail = masked;
+      gmail.completion!
+          .completeError(const AuthFailure('network', offline: true));
+      await tester.pumpAndSettle();
+      expect(gmail.statusReads, 2,
+          reason: 'reconcile using an authenticated read');
+      if (language == 'my') {
+        expect(tester.widget<FilledButton>(connect).onPressed, isNull);
+        expect(find.text(copy.gmailStatusUnknown), findsOneWidget);
+        gmail.linkedEmail = masked;
+        await tester.tap(find.text(copy.gmailCheckStatus));
+        await tester.pumpAndSettle();
+        expect(gmail.statusReads, 3);
+      }
+      expect(find.text(copy.gmailLinked(masked)), findsOneWidget);
+      expect(gmail.submissions, 1);
+    });
+
     testWidgets('T37/T43: Gmail reacts to offline transitions ($language)',
         (tester) async {
       final copy = await AppLocalizations.delegate.load(Locale(language));

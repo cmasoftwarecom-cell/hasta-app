@@ -67,6 +67,8 @@ P1-GMAIL-SESSION-EXPIRY: Linked Accounts revalidates the proved account before s
 
 P1-T43-OFFLINE-TRANSITION: Linked Accounts listens to Android/iOS network availability while the unlinked form is visible. The CTA starts disabled until availability is known, disables on loss with localized copy, and re-enables on reconnect if status is ready. API errors still handle network or backend failure independently. English/Myanmar T43 widgets cover loss before a tap and recovery; native network-toggle QA remains open.
 
+P1-GMAIL-CANCEL-SUBMIT: Cancel ends only the pre-submit consent attempt. Linked Accounts shows localized finishing copy during completion and rechecks masked status for uncertain results, without resubmitting the code. If status cannot confirm linking, Connect remains disabled until an explicit status check succeeds. T37-linked English/Myanmar widgets cover cancellation, finishing, ambiguous responses, and status-only recovery.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -97,7 +99,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix P1-GMAIL-CANCEL-SUBMIT
+Hasta review PR #3
 ```
 
 ## Changelog (append one line per merged PR)
