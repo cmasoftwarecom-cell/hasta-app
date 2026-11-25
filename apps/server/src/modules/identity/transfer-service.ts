@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import { HttpAdapterHost } from '@nestjs/core';
 import { PrismaClient, transfer_tokens } from '@prisma/client';
 import { createPublicKey, verify as verifySignature } from 'node:crypto';
 import { denied, failure, seal, sha, transferToken, unseal, uuid7, verify } from '../auth/credentials';
@@ -6,6 +7,7 @@ import { GuestAuth } from '../auth/service';
 import { ConsentTx as Tx, EnrollmentInput, consentLock } from './consent-store';
 
 export const transferTtlMs = 120_000;
+export const QR_LOCAL_QA = Symbol('QR transfer local QA opt-in');
 const rateWindowMs = 180_000;
 const replayTtlMs = 604_800_000;
 const statusOf = (row: transfer_tokens, now = Date.now()) => row.status !== 'pending' ? row.status :
@@ -26,10 +28,18 @@ const used = () => failure(409, 'token_used');
 
 @Injectable()
 export class DeviceTransfer {
-  constructor(private readonly db: PrismaClient, private readonly auth: GuestAuth) {}
+  constructor(private readonly db: PrismaClient, private readonly auth: GuestAuth,
+    private readonly http: HttpAdapterHost, @Inject(QR_LOCAL_QA) private readonly localQrQa: boolean) {}
 
   private enabled() {
-    if (process.env.HASTA_AUTH_QR_TRANSFER_ENABLED !== 'true') throw missing();
+    if (!this.localQrQa || process.env.HASTA_ENV !== 'test' ||
+        process.env.HASTA_AUTH_QR_TRANSFER_ENABLED !== 'true' ||
+        this.http.httpAdapter.getHttpServer().address()?.address !== '127.0.0.1') throw missing();
+    const raw = process.env.HASTA_DATABASE_URL ?? '';
+    if (!URL.canParse(raw)) throw missing();
+    const url = new URL(raw);
+    if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' ||
+        url.pathname !== '/hasta_test' || url.search || url.hash) throw missing();
   }
 
   private async replay<T>(tx: Tx, scope: string, key: string, fp: string, work: () => Promise<T>,

@@ -42,7 +42,7 @@ async function startNativeApi(port = 3000, fixture) {
   // or rely on process substitution exporting settings in the runner's shell.
   Object.assign(process.env, nativeAuthEnv(readFileSync(resolve(__dirname, '../../../.env.example'), 'utf8')));
   const { createApp } = require('../dist/main');
-  const app = await createApp(fixture?.providerFactory);
+  const app = await createApp(fixture?.providerFactory, { localQrQa: fixture?.localQrQa === true });
   try {
     fixture?.configure(app);
     await app.listen(port, '127.0.0.1');

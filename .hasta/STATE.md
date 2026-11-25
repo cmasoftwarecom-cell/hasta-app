@@ -49,6 +49,8 @@ S2 QR presentation: opt-in Android debug Settings and launcher shortcut use `FLA
 
 S2 local build verification: Flutter analysis and 22 tests passed in both default and QA configurations. Local Android debug and release APKs passed the T36 artifact check with the same QA feature defines: debug includes the scanner and camera permission; release excludes both and the quick-test fixtures. Neither artifact verifies physical T28 or signed distribution.
 
+P0-QR-ROLLOUT-GATE: The regular server cannot enable QR transfer via its feature flag. ADR-0015 now requires explicit native QR QA launcher opt-in, `HASTA_ENV=test`, a loopback HTTP listener, and a disposable loopback `hasta_test` PostgreSQL URL. T27 rollout regression covers all six transfer endpoints in blocked configurations and retains the existing positive local transfer journey. Server-verifiable hardware approval and native T28 remain open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -79,7 +81,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta test T28 on two dedicated local Android phones
+Hasta fix P1-QR-BACK-CANCEL
 ```
 
 ## Changelog (append one line per merged PR)

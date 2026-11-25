@@ -11,7 +11,7 @@ import { GOOGLE_LINK, GoogleLinks, googleLinkProvider } from './modules/identity
 import { RecoveryController } from './modules/identity/recovery-controller';
 import { GmailRecovery } from './modules/identity/recovery-service';
 import { TransferController } from './modules/identity/transfer-controller';
-import { DeviceTransfer } from './modules/identity/transfer-service';
+import { DeviceTransfer, QR_LOCAL_QA } from './modules/identity/transfer-service';
 
 @Injectable()
 export class Database extends PrismaClient implements OnApplicationShutdown {
@@ -48,9 +48,10 @@ class ApiErrors {
     GoogleLinks, GmailRecovery, DeviceTransfer] })
 class AppModule {}
 
-export async function createApp(providerFactory = googleLinkProvider) {
+export async function createApp(providerFactory = googleLinkProvider, options: { localQrQa?: boolean } = {}) {
   const app = await NestFactory.create({
-    module: AppModule, providers: [{ provide: GOOGLE_LINK, useFactory: providerFactory }],
+    module: AppModule, providers: [{ provide: GOOGLE_LINK, useFactory: providerFactory },
+      { provide: QR_LOCAL_QA, useValue: options.localQrQa === true }],
   }, { logger: ['warn', 'error'] });
   app.use((request: { headers: Record<string, unknown> }, response: { setHeader(name: string, value: string): void },
     next: () => void) => {

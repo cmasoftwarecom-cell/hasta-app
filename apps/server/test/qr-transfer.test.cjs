@@ -3,23 +3,28 @@ const { generateKeyPairSync, randomBytes, sign } = require('node:crypto');
 const { test } = require('node:test');
 const { createApp, Database } = require('../dist/main');
 const { sha, uuid7 } = require('../dist/modules/auth/credentials');
+const { startNativeTransferApi } = require('./native-transfer-api.cjs');
 
 test('T25–T29 QR transfer: local HTTP, native-shaped signatures and committed DB assertions', async () => {
   const database = new URL(process.env.HASTA_DATABASE_URL);
   assert.equal(database.pathname, '/hasta_test');
-  assert.ok(['127.0.0.1', 'localhost', '[::1]'].includes(database.hostname));
+  assert.equal(database.hostname, '127.0.0.1');
   Object.assign(process.env, { HASTA_ENV: 'test', HASTA_AUTH_QR_TRANSFER_ENABLED: 'false',
     HASTA_AUTH_SECRET: randomBytes(32).toString('hex'), HASTA_DEVICE_PEPPER: randomBytes(32).toString('hex'),
     HASTA_ACCESS_TOKEN_TTL_SECONDS: '900', HASTA_REFRESH_TOKEN_TTL_SECONDS: '2592000',
     HASTA_DEVICE_TOKEN_TTL_SECONDS: '31536000', HASTA_DEVICE_REGISTER_PER_HOUR: '10',
     HASTA_GUEST_CREATE_PER_HOUR: '3' });
-  const app = await createApp();
+  const app = await startNativeTransferApi(0);
+  const normal = await createApp();
+  const otherListener = await createApp(undefined, { localQrQa: true });
   const db = app.get(Database);
   try {
-    await app.listen(0, '127.0.0.1');
+    await normal.listen(0, '127.0.0.1');
+    await otherListener.listen(0, '127.0.0.2');
     const url = await app.getUrl();
-    const call = async (path, body, bearer, key = uuid7()) => {
-      const res = await fetch(`${url}/v1/${path}`, { method: body ? 'POST' : 'GET', headers: {
+    const normalUrl = await normal.getUrl();
+    const call = async (path, body, bearer, key = uuid7(), base = url) => {
+      const res = await fetch(`${base}/v1/${path}`, { method: body ? 'POST' : 'GET', headers: {
         'content-type': 'application/json', 'idempotency-key': key, ...(bearer ? { authorization: `Bearer ${bearer}` } : {}),
       }, body: body && JSON.stringify(body) });
       return { status: res.status, replay: res.headers.get('idempotent-replayed'),
@@ -56,6 +61,40 @@ test('T25–T29 QR transfer: local HTTP, native-shaped signatures and committed 
       call(qr + 'confirm', { ...old.creds, transfer_id, approval_signature }, actor, key);
     err(await start(), 404, 'not_found');
     process.env.HASTA_AUTH_QR_TRANSFER_ENABLED = 'true';
+    // P0-QR-ROLLOUT-GATE / T27: a flag alone cannot activate the HTTP surface.
+    const blockedId = uuid7();
+    // Syntactically valid requests must be gated before authentication or lookup.
+    const noDevice = { device_token: 'dt_invalid', device_proof: '0'.repeat(64) };
+    const denyAll = async (base) => {
+      const calls = [
+        ['start', { ...old.creds, approval_key: approval.approval_key }, actor],
+        ['redeem', { ...noDevice, token: `tt_${'A'.repeat(43)}` }],
+        ['confirm', { ...noDevice, transfer_id: blockedId, approval_signature: approval.sign('fixture') }],
+        ['reject', { ...noDevice, transfer_id: blockedId }],
+        ['claim', { ...noDevice, transfer_id: blockedId }],
+        [blockedId],
+      ];
+      for (const [path, body, bearer] of calls) err(await call(qr + path, body, bearer, undefined, base), 404, 'not_found');
+    };
+    const originalDatabase = process.env.HASTA_DATABASE_URL;
+    try {
+      await denyAll(normalUrl);
+      await denyAll(await otherListener.getUrl());
+      for (const env of ['production', 'staging', 'beta']) {
+        process.env.HASTA_ENV = env;
+        await denyAll(url);
+      }
+      process.env.HASTA_ENV = 'test';
+      for (const invalidDatabase of ['not-a-url', 'postgresql://db.invalid/hasta_test',
+        originalDatabase.replace('/hasta_test', '/hasta'), `${originalDatabase}?schema=public`]) {
+        process.env.HASTA_DATABASE_URL = invalidDatabase;
+        await denyAll(url);
+      }
+    } finally {
+      process.env.HASTA_ENV = 'test';
+      process.env.HASTA_DATABASE_URL = originalDatabase;
+    }
+    assert.equal(await db.transfer_tokens.count(), 0, 'blocked calls must not create transfer rows');
     const startKey = uuid7();
     const started = await start(startKey);
     assert.equal(started.status, 200);
@@ -154,6 +193,6 @@ test('T25–T29 QR transfer: local HTTP, native-shaped signatures and committed 
     err(await confirm2(), 410, 'token_expired');
     assert.equal((await call('me', undefined, actor2)).status, 200);
   } finally {
-    await app.close();
+    await Promise.all([app.close(), normal.close(), otherListener.close()]);
   }
 });

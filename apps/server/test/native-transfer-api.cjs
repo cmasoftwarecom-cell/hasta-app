@@ -5,6 +5,7 @@ async function startNativeTransferApi(port) {
   let source;
   const { Database } = require('../dist/main');
   return startNativeApi(port, {
+    localQrQa: true,
     configure(app) {
       const db = app.get(Database);
       const http = app.getHttpAdapter();
