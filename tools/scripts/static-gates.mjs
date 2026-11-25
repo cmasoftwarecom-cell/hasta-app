@@ -64,6 +64,11 @@ const gates = {
     const service = /^ {2}postgres:\s*\n((?:^ {4,}.*\n)+)/m.exec(compose)?.[1] ?? '';
     assert.deepEqual([...service.matchAll(/^ {4}image:\s*(.*)$/gm)].map((m) => m[1]), ['postgres:16']);
   },
+  'ADR-0009 Android secure storage': () => {
+    const gradle = read('apps/mobile/android/app/build.gradle');
+    const floor = gradle.match(/^\s*minSdk(?:Version)?\s*=?\s*(\d+)\s*$/m);
+    assert.ok(floor && Number(floor[1]) >= 23, 'Pin minimum Android API 23 for EncryptedSharedPreferences');
+  },
   DS: () => {
     for (const path of mobile.filter((path) => path !== 'apps/mobile/lib/design_tokens.g.dart')) {
       assert.doesNotMatch(read(path), /(?:0x[\da-f]{6,8}|#[\da-f]{6,8})\b/i, path);
