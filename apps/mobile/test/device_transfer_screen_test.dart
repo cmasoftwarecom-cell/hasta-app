@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile/features/auth/data/guest_repository.dart';
 import 'package:mobile/features/auth/data/native_qr_surface.dart';
@@ -126,6 +128,65 @@ class _Surface extends NativeQrSurface {
 }
 
 void main() {
+  for (final language in ['en', 'my']) {
+    for (final receiving in [false, true]) {
+      testWidgets(
+          'T28/DS QR ${receiving ? 'receiver' : 'sender'} title fits at 200% ($language)',
+          (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(320, 568);
+        tester.view.padding = const FakeViewPadding(top: 24);
+        tester.platformDispatcher.textScaleFactorTestValue = 2;
+        addTearDown(tester.view.resetDevicePixelRatio);
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetPadding);
+        addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+        final order = <String>[];
+        final session = _Session(order, receiving ? null : _profile);
+        addTearDown(session.close);
+        final surface = _Surface(order);
+        await tester.pumpWidget(HastaApp(
+            session: session,
+            locale: Locale(language),
+            transferSurface: surface));
+        await tester.pumpAndSettle();
+        final copy =
+            AppLocalizations.of(tester.element(find.byType(Scaffold).first))!;
+        if (receiving) {
+          surface.launch();
+        } else {
+          await tester.tap(find.byTooltip(copy.settings));
+          await tester.pumpAndSettle();
+          final changeDevice = find.text(copy.transferSend).hitTestable();
+          await tester.scrollUntilVisible(changeDevice, 100);
+          await tester.tap(changeDevice);
+        }
+        await tester.pumpAndSettle();
+
+        final heading =
+            find.text(receiving ? copy.transferReceive : copy.transferSend);
+        final help = find
+            .text(receiving ? copy.transferReceiveHelp : copy.transferSendHelp);
+        final bounds = tester.getRect(heading);
+        expect(bounds.top, greaterThanOrEqualTo(24),
+            reason: 'No part of the heading may extend above the safe area');
+        expect(bounds.bottom, lessThanOrEqualTo(tester.getTopLeft(help).dy),
+            reason: 'The entire heading must fit before the body');
+        final paragraph = tester.renderObject<RenderParagraph>(heading);
+        expect(paragraph.maxLines, isNull);
+        expect(paragraph.textScaler.scale(24), 48);
+        expect(paragraph.text.style!.height, greaterThanOrEqualTo(1.65));
+        expect(
+            find.ancestor(
+                of: heading,
+                matching: find.byWidgetPredicate((widget) =>
+                    widget is Semantics && widget.properties.header == true)),
+            findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   for (final (language, expiry) in [
     ('en', 'timer'),
     ('my', 'claim'),

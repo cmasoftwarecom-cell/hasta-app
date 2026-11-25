@@ -306,15 +306,18 @@ class _DeviceTransferScreenState extends State<DeviceTransferScreen>
         if (!didPop) unawaited(_cancel());
       },
       child: Scaffold(
-        appBar: AppBar(
-          title:
-              Text(widget.receiving ? copy.transferReceive : copy.transferSend),
-          automaticallyImplyLeading: false,
-        ),
         body: SafeArea(
           child: ListView(
             padding: EdgeInsets.all(space[7]),
             children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  widget.receiving ? copy.transferReceive : copy.transferSend,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              SizedBox(height: space[4]),
               Semantics(liveRegion: true, child: Text(status)),
               if (!terminal && remaining != null)
                 Text(copy.transferTime(remaining)),

@@ -55,6 +55,8 @@ P1-QR-BACK-CANCEL: Android Back and Close now share the sender's rejection path 
 
 P1-QR-CLAIM-EXPIRY: After a registered scan, both local timeout and a server claim-expiry response show conditional en/my guidance: if approved, close and use the existing Welcome action on the replacement; otherwise start a new transfer on the old device. No automatic sign-in, TTL extension, or API change. T25/T28 widgets cover both expiry paths and expiry before a registered scan; the loopback PostgreSQL regression checks that the replacement resumes the same account after a confirmed transfer without creating a second account. Physical T28 remains open.
 
+P2-QR-TITLE-SCALE: Sender and receiver titles are wrapping accessibility headings inside the safe, scrollable content, using the existing screen-title token. Four T28/DS widget cases (en/my at 320×568 and 200%) failed with the old AppBar's scale cap and passed with full scaling, safe-area bounds, and ≥1.65 line height. QR contents and actions are unchanged. The local native T28 runner still requires two authorized Android phones.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
@@ -85,7 +87,7 @@ device token 365 d · refresh 30 d · guest-create 3/device/hour · device-regis
 
 ## Next one-line prompt
 ```
-Hasta fix P2-QR-TITLE-SCALE
+Hasta test T28 on two dedicated local Android phones
 ```
 
 ## Changelog (append one line per merged PR)
