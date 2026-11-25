@@ -1,0 +1,15 @@
+﻿{
+  "name": "hasta-app",
+  "version": "1.0.0",
+  "description": "Hasta v1 agent skill package (minimal-prompt v2) - Flutter + NestJS social feed, chat and dating app for the Myanmar market",
+  "author": "cmasoftwarecom-cell",
+  "main": "SKILL.md",
+  "skills": ["SKILL.md"],
+  "references": {
+    "spec": "references/spec-master.md",
+    "api": "references/api-contract.md",
+    "sprints": "references/sprint-prompts.md",
+    "tokens": "assets/design-tokens.json",
+    "ui": "docs/ui-reference.html"
+  }
+}

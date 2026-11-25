@@ -1,0 +1,9 @@
+﻿{
+  "name": "hasta-app",
+  "version": "1.0.0",
+  "description": "Hasta v1 Plugin",
+  "author": "cmasoftwarecom-cell",
+  "skills": [
+    "./skills/hasta"
+  ]
+}
