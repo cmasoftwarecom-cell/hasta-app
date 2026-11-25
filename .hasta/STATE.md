@@ -69,6 +69,8 @@ P1-T43-OFFLINE-TRANSITION: Linked Accounts listens to Android/iOS network availa
 
 P1-GMAIL-CANCEL-SUBMIT: Cancel ends only the pre-submit consent attempt. Linked Accounts shows localized finishing copy during completion and rechecks masked status for uncertain results, without resubmitting the code. If status cannot confirm linking, Connect remains disabled until an explicit status check succeeds. T37-linked English/Myanmar widgets cover cancellation, finishing, ambiguous responses, and status-only recovery.
 
+P2-GMAIL-FLOW-COVERAGE: T37 drives the real Gmail link coordinator and repository through the mocked native consent channel and an isolated loopback HTTP fixture. It checks cancellation before submission, stale and duplicate callbacks, submit notification before one authenticated completion, and unchanged local credentials. Native OAuth and app-association QA remain open.
+
 ## Imported decisions (not all present on this branch)
 | Item | Status | ADR |
 | --- | --- | --- |
