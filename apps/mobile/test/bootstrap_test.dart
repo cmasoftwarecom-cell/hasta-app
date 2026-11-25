@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,6 +41,17 @@ class _GuestSession implements GuestSession {
 
   @override
   Future<void> close() async {}
+}
+
+class _SessionsGuest extends _GuestSession implements DeviceSessions {
+  var result = Completer<List<DeviceSession>>();
+  String? requestedAccount;
+
+  @override
+  Future<List<DeviceSession>> listDeviceSessions(String accountId) {
+    requestedAccount = accountId;
+    return result.future;
+  }
 }
 
 void main() {
@@ -105,6 +118,75 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+  }
+
+  for (final language in ['en', 'my']) {
+    testWidgets('T37/T40: signed-in active sessions states at 200% ($language)',
+        (tester) async {
+      setLargeTextViewport(tester);
+      final locale = Locale(language);
+      final copy = await AppLocalizations.delegate.load(locale);
+      final guest = _SessionsGuest();
+      await tester.pumpWidget(HastaApp(session: guest, locale: locale));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.securityDevices), findsNothing);
+      expect(guest.requestedAccount, isNull);
+      Future<void> tapVisible(Finder finder) async {
+        await tester.ensureVisible(finder);
+        await tester.pump();
+        await tester.tap(finder);
+      }
+
+      await tapVisible(find.text(copy.welcomeContinue));
+      await tester.pumpAndSettle();
+      await tapVisible(find.byTooltip(copy.settings));
+      await tester.pumpAndSettle();
+      await tapVisible(find.text(copy.securityDevices));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(guest.requestedAccount, 'guest');
+      guest.result.completeError(const AuthFailure('network', offline: true));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.offline), findsOneWidget);
+
+      Future<void> retry() async {
+        guest.result = Completer<List<DeviceSession>>();
+        await tapVisible(find.text(copy.retry));
+        await tester.pump();
+      }
+
+      await retry();
+      guest.result.completeError(const AuthFailure('unavailable', status: 503));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.genericError), findsOneWidget);
+      await retry();
+      guest.result.complete([]);
+      await tester.pumpAndSettle();
+      expect(find.text(copy.noActiveSessions), findsOneWidget);
+
+      guest.result = Completer<List<DeviceSession>>()
+        ..complete([
+          (
+            platform: 'ios',
+            lastActive: DateTime.utc(2026, 11, 25),
+            current: true
+          ),
+          (
+            platform: 'android',
+            lastActive: DateTime.utc(2026, 11, 24),
+            current: false
+          ),
+        ]);
+      await tapVisible(find.byType(BackButton).last);
+      await tester.pumpAndSettle();
+      await tapVisible(find.text(copy.securityDevices));
+      await tester.pumpAndSettle();
+      expect(find.text(copy.iosDevice), findsOneWidget);
+      expect(find.text(copy.currentSession), findsOneWidget);
+      expect(find.text(copy.androidDevice), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('T40 text-scale: fixed-height control overflows at 200%',

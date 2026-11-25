@@ -22,3 +22,9 @@ abstract interface class GuestSession {
   Future<void> signOut();
   Future<void> close();
 }
+
+typedef DeviceSession = ({String platform, DateTime lastActive, bool current});
+
+abstract interface class DeviceSessions {
+  Future<List<DeviceSession>> listDeviceSessions(String accountId);
+}

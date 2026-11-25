@@ -187,6 +187,17 @@ void main() {
         rejectAccess = false;
         response.write(jsonEncode(
             {'access_token': 'next', 'refresh_token': 'next-refresh'}));
+      } else if (path == '/v1/auth/sessions') {
+        response.write(jsonEncode([
+          {
+            'id': 'fixture-session',
+            'device_hash_short': 'abcdef01',
+            'platform': 'android',
+            'created_at': '2026-11-25T12:00:00Z',
+            'last_seen_at': null,
+            'current': true,
+          },
+        ]));
       } else if (path.endsWith('/logout')) {
         response.statusCode = 204;
       } else {
@@ -228,7 +239,22 @@ void main() {
     expect((await second.cached())?.displayName, 'Traveler');
     expect((await db.load('guest'))!.toJson(),
         {'accountId': 'guest', 'displayName': 'Traveler', 'username': null});
-    expect((await second.restore())?.accountId, 'guest');
+    final before = requests.length;
+    await expectLater(
+        second.listDeviceSessions('other'),
+        throwsA(
+            isA<AuthFailure>().having((error) => error.status, 'status', 401)));
+    expect(requests.length, before);
+    expect(await second.listDeviceSessions('guest'), [
+      (
+        platform: 'android',
+        lastActive: DateTime.utc(2026, 11, 25, 12),
+        current: true
+      ),
+    ]);
+    expect(requests.last.$1, '/v1/auth/sessions');
+    expect(requests.last.$2, isNull);
+    expect(requests.last.$3, 'Bearer next');
     final refresh = requests.firstWhere((item) => item.$1.endsWith('/refresh'));
     expect(refresh.$4, {
       'device_token': 'device',
